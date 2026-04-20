@@ -80,6 +80,7 @@ const Profile = () => {
       }
 
       const idPayload = idToken ? parseTokenPayload(idToken) : null;
+      const tokenUserId = typeof idPayload?.sub === "string" ? idPayload.sub : "";
       const fallbackEmail = typeof idPayload?.email === "string" ? idPayload.email : "";
       const fallbackName = typeof idPayload?.name === "string" ? idPayload.name : "LocalLoop User";
 
@@ -95,24 +96,38 @@ const Profile = () => {
 
         setProfile(mergedProfile);
 
-        const [products, sentMessages, receivedMessages, offers] = await Promise.all([
-          listProducts({ ownerId: mergedProfile.user_id }),
-          listChatMessages({ senderUserId: mergedProfile.user_id }),
-          listChatMessages({ recipientUserId: mergedProfile.user_id }),
-          listOffers({ buyerUserId: mergedProfile.user_id }),
-        ]);
+        const scopedUserId = tokenUserId || mergedProfile.user_id;
 
-        const threadIds = new Set<string>([
-          ...sentMessages.map((msg) => msg.chat_id),
-          ...receivedMessages.map((msg) => msg.chat_id),
-        ]);
+        try {
+          const [products, sentMessages, receivedMessages, offers] = await Promise.all([
+            listProducts({ ownerId: scopedUserId }),
+            listChatMessages({ senderUserId: scopedUserId }),
+            listChatMessages({ recipientUserId: scopedUserId }),
+            listOffers({ buyerUserId: scopedUserId }),
+          ]);
 
-        setActiveListings(products.length);
-        setChatThreads(threadIds.size);
-        setOpenOffers(offers.filter((offer) => offer.status === "pending").length);
+          const threadIds = new Set<string>([
+            ...sentMessages.map((msg) => msg.chat_id),
+            ...receivedMessages.map((msg) => msg.chat_id),
+          ]);
 
-        const completedSignals = products.length + offers.length + threadIds.size;
-        setTrustScore(completedSignals >= 8 ? "Trusted" : completedSignals >= 3 ? "Growing" : "New");
+          setActiveListings(products.length);
+          setChatThreads(threadIds.size);
+          setOpenOffers(offers.filter((offer) => offer.status === "pending").length);
+
+          const completedSignals = products.length + offers.length + threadIds.size;
+          setTrustScore(completedSignals >= 8 ? "Trusted" : completedSignals >= 3 ? "Growing" : "New");
+        } catch {
+          // Keep profile visible even if dashboard stats fail to load.
+          setActiveListings(0);
+          setChatThreads(0);
+          setOpenOffers(0);
+          setTrustScore("New");
+          toast({
+            title: "Profile loaded with limited data",
+            description: "Could not load listing, chat, or offer stats right now.",
+          });
+        }
       } catch (error: unknown) {
         localStorage.removeItem("localloop_access_token");
         localStorage.removeItem("localloop_id_token");
