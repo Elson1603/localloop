@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Github, Mail } from "lucide-react";
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
@@ -5,8 +6,11 @@ import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
-const Auth = () => (
-  <div className="grid min-h-screen bg-background lg:grid-cols-2">
+const Auth = () => {
+  const [mode, setMode] = useState<"login" | "signup">("login");
+
+  return (
+    <div className="grid min-h-screen bg-background lg:grid-cols-2">
     <section className="relative hidden overflow-hidden border-r border-border/70 bg-secondary lg:flex lg:items-center lg:justify-center">
       <div className="absolute -left-8 top-10 h-48 w-48 rounded-full bg-primary/25 blur-3xl" />
       <div className="absolute -bottom-10 right-10 h-52 w-52 rounded-full bg-accent/25 blur-3xl" />
@@ -22,9 +26,34 @@ const Auth = () => (
     <section className="flex items-center justify-center p-6">
       <Card className="w-full max-w-md rounded-2xl border-border/70 p-6 shadow-card">
         <p className="text-sm text-muted-foreground">Get started</p>
-        <h2 className="mt-1 text-3xl font-bold">Login / Signup</h2>
+        <h2 className="mt-1 text-3xl font-bold">{mode === "login" ? "Login" : "Sign up"}</h2>
+
+        <div className="mt-4 grid grid-cols-2 gap-2 rounded-xl bg-secondary p-1">
+          <Button
+            type="button"
+            variant={mode === "login" ? "default" : "ghost"}
+            className="rounded-lg"
+            onClick={() => setMode("login")}
+          >
+            Login
+          </Button>
+          <Button
+            type="button"
+            variant={mode === "signup" ? "default" : "ghost"}
+            className="rounded-lg"
+            onClick={() => setMode("signup")}
+          >
+            Sign up
+          </Button>
+        </div>
 
         <form className="mt-6 space-y-4">
+          {mode === "signup" ? (
+            <div className="space-y-2">
+              <Label>Full Name</Label>
+              <Input type="text" placeholder="John Doe" />
+            </div>
+          ) : null}
           <div className="space-y-2">
             <Label>Email</Label>
             <Input type="email" placeholder="you@example.com" />
@@ -33,7 +62,15 @@ const Auth = () => (
             <Label>Password</Label>
             <Input type="password" placeholder="••••••••" />
           </div>
-          <Button className="w-full rounded-full bg-primary py-6 text-primary-foreground hover:bg-primary/90">Continue</Button>
+          {mode === "signup" ? (
+            <div className="space-y-2">
+              <Label>Confirm Password</Label>
+              <Input type="password" placeholder="••••••••" />
+            </div>
+          ) : null}
+          <Button className="w-full rounded-full bg-primary py-6 text-primary-foreground hover:bg-primary/90">
+            {mode === "login" ? "Login" : "Create account"}
+          </Button>
         </form>
 
         <div className="my-5 flex items-center gap-3 text-xs text-muted-foreground">
@@ -50,11 +87,38 @@ const Auth = () => (
         </div>
 
         <p className="mt-5 text-center text-sm text-muted-foreground">
+          {mode === "login" ? (
+            <>
+              Don&apos;t have an account?{" "}
+              <button
+                type="button"
+                className="font-medium text-primary"
+                onClick={() => setMode("signup")}
+              >
+                Sign up
+              </button>
+            </>
+          ) : (
+            <>
+              Already have an account?{" "}
+              <button
+                type="button"
+                className="font-medium text-primary"
+                onClick={() => setMode("login")}
+              >
+                Login
+              </button>
+            </>
+          )}
+        </p>
+
+        <p className="mt-2 text-center text-sm text-muted-foreground">
           Back to marketplace? <Link to="/" className="font-medium text-primary">Go Home</Link>
         </p>
       </Card>
     </section>
-  </div>
-);
+    </div>
+  );
+};
 
 export default Auth;
