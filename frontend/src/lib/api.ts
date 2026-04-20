@@ -45,6 +45,12 @@ export type UserProfile = {
   updated_at: string;
 };
 
+type PresignUploadResponse = {
+  upload_url: string;
+  object_key: string;
+  expires_in: number;
+};
+
 const getAuthToken = (): string | null => localStorage.getItem("localloop_access_token");
 
 const authHeaders = (): HeadersInit => {
@@ -64,8 +70,13 @@ const parseError = async (response: Response): Promise<string> => {
   return response.statusText || "Request failed";
 };
 
-export const listProducts = async (): Promise<Product[]> => {
-  const response = await fetch(`${API_BASE_URL}/api/v1/products`);
+export const listProducts = async (params?: { ownerId?: string }): Promise<Product[]> => {
+  const query = new URLSearchParams();
+  if (params?.ownerId) {
+    query.set("owner_id", params.ownerId);
+  }
+  const suffix = query.size ? `?${query.toString()}` : "";
+  const response = await fetch(`${API_BASE_URL}/api/v1/products${suffix}`);
   if (!response.ok) {
     throw new Error(await parseError(response));
   }
@@ -102,8 +113,81 @@ export const createProduct = async (payload: {
   return (await response.json()) as Product;
 };
 
-export const listChatMessages = async (chatId: string): Promise<ChatMessage[]> => {
-  const response = await fetch(`${API_BASE_URL}/api/v1/chats/messages?chat_id=${encodeURIComponent(chatId)}`);
+export const presignProductImageUpload = async (payload: {
+  file_name: string;
+  content_type: string;
+}): Promise<PresignUploadResponse> => {
+  const response = await fetch(`${API_BASE_URL}/api/v1/storage/presign-upload`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...authHeaders(),
+    },
+    body: JSON.stringify(payload),
+  });
+
+  if (!response.ok) {
+    throw new Error(await parseError(response));
+  }
+
+  return (await response.json()) as PresignUploadResponse;
+};
+
+export const uploadFileToS3 = async (uploadUrl: string, file: File): Promise<void> => {
+  try {
+    const response = await fetch(uploadUrl, {
+      method: "PUT",
+      headers: {
+        "Content-Type": file.type,
+      },
+      body: file,
+    });
+
+    if (!response.ok) {
+      throw new Error("Failed to upload image to S3");
+    }
+  } catch {
+    throw new Error("S3 upload blocked. Configure bucket CORS or use backend upload fallback.");
+  }
+};
+
+export const uploadProductImageViaApi = async (file: File): Promise<string> => {
+  const formData = new FormData();
+  formData.append("file", file);
+
+  const response = await fetch(`${API_BASE_URL}/api/v1/storage/upload`, {
+    method: "POST",
+    headers: {
+      ...authHeaders(),
+    },
+    body: formData,
+  });
+
+  if (!response.ok) {
+    throw new Error(await parseError(response));
+  }
+
+  const data = (await response.json()) as PresignUploadResponse;
+  return data.object_key;
+};
+
+export const listChatMessages = async (params: {
+  chatId?: string;
+  senderUserId?: string;
+  recipientUserId?: string;
+}): Promise<ChatMessage[]> => {
+  const query = new URLSearchParams();
+  if (params.chatId) {
+    query.set("chat_id", params.chatId);
+  }
+  if (params.senderUserId) {
+    query.set("sender_user_id", params.senderUserId);
+  }
+  if (params.recipientUserId) {
+    query.set("recipient_user_id", params.recipientUserId);
+  }
+
+  const response = await fetch(`${API_BASE_URL}/api/v1/chats/messages?${query.toString()}`);
   if (!response.ok) {
     throw new Error(await parseError(response));
   }
@@ -146,6 +230,26 @@ export const createOffer = async (payload: {
     throw new Error(await parseError(response));
   }
   return (await response.json()) as Offer;
+};
+
+export const listOffers = async (params?: {
+  productId?: string;
+  buyerUserId?: string;
+}): Promise<Offer[]> => {
+  const query = new URLSearchParams();
+  if (params?.productId) {
+    query.set("product_id", params.productId);
+  }
+  if (params?.buyerUserId) {
+    query.set("buyer_user_id", params.buyerUserId);
+  }
+
+  const suffix = query.size ? `?${query.toString()}` : "";
+  const response = await fetch(`${API_BASE_URL}/api/v1/offers${suffix}`);
+  if (!response.ok) {
+    throw new Error(await parseError(response));
+  }
+  return (await response.json()) as Offer[];
 };
 
 export const getMyProfile = async (): Promise<UserProfile> => {

@@ -34,9 +34,20 @@ def create_chat_message(
 
 
 @router.get("/messages", response_model=list[ChatMessageResponse])
-def list_chat_messages(chat_id: str | None = Query(default=None)) -> list[ChatMessageResponse]:
+def list_chat_messages(
+    chat_id: str | None = Query(default=None),
+    sender_user_id: str | None = Query(default=None),
+    recipient_user_id: str | None = Query(default=None),
+) -> list[ChatMessageResponse]:
     table = get_table(settings.chats_table_name)
-    response = scan_with_optional_filter(table, {"chat_id": chat_id})
+    response = scan_with_optional_filter(
+        table,
+        {
+            "chat_id": chat_id,
+            "sender_user_id": sender_user_id,
+            "recipient_user_id": recipient_user_id,
+        },
+    )
     items = response.get("Items", [])
     sorted_items = sorted(items, key=lambda item: item.get("created_at", ""))
     return [ChatMessageResponse(**serialize_dynamo(item)) for item in sorted_items]

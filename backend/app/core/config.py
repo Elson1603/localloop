@@ -16,11 +16,16 @@ class Settings(BaseSettings):
     )
 
     aws_region: str = Field(alias="AWS_REGION")
+    aws_access_key_id: str | None = Field(default=None, alias="AWS_ACCESS_KEY_ID")
+    aws_secret_access_key: str | None = Field(default=None, alias="AWS_SECRET_ACCESS_KEY")
+    aws_session_token: str | None = Field(default=None, alias="AWS_SESSION_TOKEN")
     cognito_user_pool_id: str = Field(alias="COGNITO_USER_POOL_ID")
     cognito_app_client_id: str = Field(
         validation_alias=AliasChoices("COGNITO_APP_CLIENT_ID", "COGNITO_CLIENT_ID")
     )
     cognito_app_client_secret: str = Field(default="", alias="COGNITO_APP_CLIENT_SECRET")
+    s3_bucket_name: str = Field(default="", alias="S3_BUCKET_NAME")
+    s3_presigned_expiry_seconds: int = Field(default=3600, alias="S3_PRESIGNED_EXPIRY_SECONDS")
     users_table_name: str = Field(default="LocalLoopUsers", alias="DYNAMODB_USERS_TABLE")
     products_table_name: str = Field(default="LocalLoopProducts", alias="DYNAMODB_PRODUCTS_TABLE")
     chats_table_name: str = Field(default="LocalLoopChats", alias="DYNAMODB_CHATS_TABLE")

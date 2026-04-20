@@ -31,7 +31,7 @@ const Chat = () => {
     let mounted = true;
     const loadMessages = async () => {
       try {
-        const apiMessages = await listChatMessages(chatId);
+        const apiMessages = await listChatMessages({ chatId });
         if (!mounted) {
           return;
         }
@@ -71,7 +71,7 @@ const Chat = () => {
         message: text,
       });
 
-      const apiMessages = await listChatMessages(chatId);
+      const apiMessages = await listChatMessages({ chatId });
       setMessages(
         apiMessages.map((msg) => ({
           id: msg.message_id,

@@ -12,7 +12,14 @@ from app.core.config import get_settings
 class CognitoService:
     def __init__(self) -> None:
         self.settings = get_settings()
-        self.client = boto3.client("cognito-idp", region_name=self.settings.aws_region)
+        kwargs: dict[str, str] = {"region_name": self.settings.aws_region}
+        if self.settings.aws_access_key_id and self.settings.aws_secret_access_key:
+            kwargs["aws_access_key_id"] = self.settings.aws_access_key_id
+            kwargs["aws_secret_access_key"] = self.settings.aws_secret_access_key
+            if self.settings.aws_session_token:
+                kwargs["aws_session_token"] = self.settings.aws_session_token
+
+        self.client = boto3.client("cognito-idp", **kwargs)
 
     def _secret_hash(self, username: str) -> str | None:
         secret = self.settings.cognito_app_client_secret

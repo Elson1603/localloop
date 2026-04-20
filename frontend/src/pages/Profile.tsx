@@ -7,14 +7,16 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
+import { getMyProfile, listChatMessages, listOffers, listProducts } from "@/lib/api";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8000";
 
 type UserProfile = {
-  sub: string;
+  user_id: string;
   email: string;
   username: string;
-  name: string;
+  display_name: string;
+  created_at: string;
 };
 
 type ApiErrorShape = {
@@ -53,9 +55,13 @@ const Profile = () => {
   const { toast } = useToast();
   const [loading, setLoading] = useState(true);
   const [profile, setProfile] = useState<UserProfile | null>(null);
+  const [activeListings, setActiveListings] = useState(0);
+  const [chatThreads, setChatThreads] = useState(0);
+  const [openOffers, setOpenOffers] = useState(0);
+  const [trustScore, setTrustScore] = useState("New");
 
   const initials = useMemo(() => {
-    const source = profile?.name || profile?.email || "LocalLoop";
+    const source = profile?.display_name || profile?.email || "LocalLoop";
     const words = source.trim().split(/\s+/).filter(Boolean);
     if (words.length >= 2) {
       return `${words[0][0]}${words[1][0]}`.toUpperCase();
@@ -75,33 +81,38 @@ const Profile = () => {
 
       const idPayload = idToken ? parseTokenPayload(idToken) : null;
       const fallbackEmail = typeof idPayload?.email === "string" ? idPayload.email : "";
-      const fallbackName = typeof idPayload?.name === "string" ? idPayload.name : "";
-      const fallbackUsername = typeof idPayload?.username === "string" ? idPayload.username : fallbackEmail;
+      const fallbackName = typeof idPayload?.name === "string" ? idPayload.name : "LocalLoop User";
 
       try {
-        const response = await fetch(`${API_BASE_URL}/api/v1/auth/me`, {
-          headers: {
-            Authorization: `Bearer ${accessToken}`,
-          },
-        });
-
-        if (!response.ok) {
-          const message = await getErrorMessage(response);
-          throw new Error(message);
-        }
-
-        const me = (await response.json()) as {
-          sub?: string;
-          email?: string;
-          username?: string;
+        const myProfile = await getMyProfile();
+        const mergedProfile: UserProfile = {
+          user_id: myProfile.user_id,
+          email: myProfile.email || fallbackEmail || "-",
+          username: myProfile.username || fallbackEmail || "-",
+          display_name: myProfile.display_name || fallbackName,
+          created_at: myProfile.created_at,
         };
 
-        setProfile({
-          sub: me.sub || "-",
-          email: me.email || fallbackEmail || "-",
-          username: me.username || fallbackUsername || "-",
-          name: fallbackName || me.email || "LocalLoop User",
-        });
+        setProfile(mergedProfile);
+
+        const [products, sentMessages, receivedMessages, offers] = await Promise.all([
+          listProducts({ ownerId: mergedProfile.user_id }),
+          listChatMessages({ senderUserId: mergedProfile.user_id }),
+          listChatMessages({ recipientUserId: mergedProfile.user_id }),
+          listOffers({ buyerUserId: mergedProfile.user_id }),
+        ]);
+
+        const threadIds = new Set<string>([
+          ...sentMessages.map((msg) => msg.chat_id),
+          ...receivedMessages.map((msg) => msg.chat_id),
+        ]);
+
+        setActiveListings(products.length);
+        setChatThreads(threadIds.size);
+        setOpenOffers(offers.filter((offer) => offer.status === "pending").length);
+
+        const completedSignals = products.length + offers.length + threadIds.size;
+        setTrustScore(completedSignals >= 8 ? "Trusted" : completedSignals >= 3 ? "Growing" : "New");
       } catch (error: unknown) {
         localStorage.removeItem("localloop_access_token");
         localStorage.removeItem("localloop_id_token");
@@ -159,7 +170,7 @@ const Profile = () => {
                 <AvatarFallback>{initials}</AvatarFallback>
               </Avatar>
               <div>
-                <h1 className="text-2xl font-bold">{profile.name}</h1>
+                <h1 className="text-2xl font-bold">{profile.display_name}</h1>
                 <p className="text-muted-foreground">{profile.email}</p>
               </div>
             </div>
@@ -172,22 +183,22 @@ const Profile = () => {
         <section className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
           <Card className="rounded-2xl border-border/70 p-4">
             <p className="text-xs uppercase tracking-wide text-muted-foreground">Active Listings</p>
-            <p className="mt-2 text-2xl font-semibold">0</p>
+            <p className="mt-2 text-2xl font-semibold">{activeListings}</p>
             <p className="mt-1 text-sm text-muted-foreground">Products you are currently selling</p>
           </Card>
           <Card className="rounded-2xl border-border/70 p-4">
             <p className="text-xs uppercase tracking-wide text-muted-foreground">Chat Threads</p>
-            <p className="mt-2 text-2xl font-semibold">0</p>
+            <p className="mt-2 text-2xl font-semibold">{chatThreads}</p>
             <p className="mt-1 text-sm text-muted-foreground">Buyer and seller conversations</p>
           </Card>
           <Card className="rounded-2xl border-border/70 p-4">
             <p className="text-xs uppercase tracking-wide text-muted-foreground">Open Offers</p>
-            <p className="mt-2 text-2xl font-semibold">0</p>
+            <p className="mt-2 text-2xl font-semibold">{openOffers}</p>
             <p className="mt-1 text-sm text-muted-foreground">Negotiations waiting for response</p>
           </Card>
           <Card className="rounded-2xl border-border/70 p-4">
             <p className="text-xs uppercase tracking-wide text-muted-foreground">Trust Score</p>
-            <p className="mt-2 text-2xl font-semibold">New</p>
+            <p className="mt-2 text-2xl font-semibold">{trustScore}</p>
             <p className="mt-1 text-sm text-muted-foreground">Will improve with successful trades</p>
           </Card>
         </section>
@@ -204,7 +215,7 @@ const Profile = () => {
             </div>
             <div className="mt-3">
               <p className="text-sm text-muted-foreground">User ID</p>
-              <p className="break-all font-medium">{profile.sub}</p>
+              <p className="break-all font-medium">{profile.user_id}</p>
             </div>
             <div className="mt-3">
               <p className="text-sm text-muted-foreground">Authentication</p>

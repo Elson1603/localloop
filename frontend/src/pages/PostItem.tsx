@@ -11,8 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
-import { createProduct } from "@/lib/api";
-import { makePlaceholderImage } from "@/lib/marketplace";
+import { createProduct, presignProductImageUpload, uploadFileToS3, uploadProductImageViaApi } from "@/lib/api";
 import { categories } from "@/data/mockData";
 
 const PostItem = () => {
@@ -84,13 +83,29 @@ const PostItem = () => {
 
     setIsPublishing(true);
     try {
+      const uploadedObjectKeys = await Promise.all(
+        files.map(async (file) => {
+          try {
+            const presigned = await presignProductImageUpload({
+              file_name: file.name,
+              content_type: file.type,
+            });
+            await uploadFileToS3(presigned.upload_url, file);
+            return presigned.object_key;
+          } catch {
+            // Fallback route via backend to bypass bucket CORS issues in local setup.
+            return await uploadProductImageViaApi(file);
+          }
+        }),
+      );
+
       await createProduct({
         title: title.trim(),
         description: description.trim(),
         category,
         price: numericPrice,
         location: location.trim(),
-        image_urls: [makePlaceholderImage(title)],
+        image_urls: uploadedObjectKeys,
       });
       setIsPublishing(false);
       toast({ title: "Listing published", description: "Your item is now live in marketplace." });

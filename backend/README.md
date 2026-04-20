@@ -184,3 +184,75 @@ Offers:
 - `GET /api/v1/offers`
 
 All endpoints above should be called with Cognito Bearer token where required.
+
+## 9) S3 setup (Product Images)
+
+This project uploads product images directly from frontend to S3 using backend-generated presigned URLs.
+
+### AWS S3 steps
+
+1. Open AWS Console -> S3 -> Create bucket.
+2. Bucket name: for example `localloop-product-images`.
+3. Region: same as backend (`AWS_REGION`).
+4. Keep `Block all public access` enabled (recommended for secure setup).
+5. Enable bucket versioning (recommended).
+6. Create bucket.
+
+### Add CORS on S3 bucket
+
+Go to bucket -> Permissions -> CORS configuration and set:
+
+```json
+[
+   {
+      "AllowedHeaders": ["*"],
+      "AllowedMethods": ["PUT", "GET", "HEAD"],
+      "AllowedOrigins": ["http://localhost:8080", "http://127.0.0.1:8080", "http://localhost:5173", "http://127.0.0.1:5173"],
+      "ExposeHeaders": ["ETag"]
+   }
+]
+```
+
+### Backend environment
+
+Set these values in `.env`:
+
+- `S3_BUCKET_NAME=localloop-product-images`
+- `S3_PRESIGNED_EXPIRY_SECONDS=3600`
+
+### IAM permissions for backend identity
+
+Add these S3 actions on the bucket:
+
+- `s3:PutObject`
+- `s3:GetObject`
+
+Scope resources to:
+
+- `arn:aws:s3:::<your-bucket-name>`
+- `arn:aws:s3:::<your-bucket-name>/*`
+
+### New S3 endpoint
+
+- `POST /api/v1/storage/presign-upload` (auth required)
+
+Request body:
+
+```json
+{
+   "file_name": "phone.jpg",
+   "content_type": "image/jpeg"
+}
+```
+
+Response includes:
+
+- `upload_url`: presigned PUT URL
+- `object_key`: store this in product `image_urls`
+
+### Flow in app
+
+1. Frontend asks backend for presigned upload URL.
+2. Frontend uploads file directly to S3 using PUT.
+3. Frontend creates product with uploaded `object_key` values.
+4. Backend converts stored object keys to temporary presigned GET URLs when listing/fetching products.
