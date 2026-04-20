@@ -1,5 +1,5 @@
 import { MapPin, MessageCircle, Repeat2, Star } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { MarketNavbar } from "@/components/localloop/MarketNavbar";
 import { PageShell } from "@/components/localloop/PageShell";
@@ -7,13 +7,94 @@ import { ProductCard } from "@/components/localloop/ProductCard";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { items } from "@/data/mockData";
+import type { MarketplaceItem } from "@/data/mockData";
+import { useToast } from "@/hooks/use-toast";
+import { createOffer, getProduct, listProducts } from "@/lib/api";
+import { toMarketplaceItem } from "@/lib/marketplace";
 
 const ProductDetail = () => {
+  const { toast } = useToast();
   const { id } = useParams();
-  const product = useMemo(() => items.find((item) => item.id === id) || items[0], [id]);
-  const [selectedImage, setSelectedImage] = useState(product.image);
-  const gallery = [product.image, ...items.filter((item) => item.id !== product.id).slice(0, 3).map((item) => item.image)];
+  const [items, setItems] = useState<MarketplaceItem[]>([]);
+  const [product, setProduct] = useState<MarketplaceItem | null>(null);
+  const [selectedImage, setSelectedImage] = useState("");
+
+  useEffect(() => {
+    let mounted = true;
+    const loadData = async () => {
+      if (!id) {
+        return;
+      }
+      try {
+        const [productData, allProducts] = await Promise.all([getProduct(id), listProducts()]);
+        if (!mounted) {
+          return;
+        }
+        const mappedProduct = toMarketplaceItem(productData);
+        setProduct(mappedProduct);
+        setSelectedImage(mappedProduct.image);
+        setItems(allProducts.map(toMarketplaceItem));
+      } catch (error: unknown) {
+        if (!mounted) {
+          return;
+        }
+        toast({
+          title: "Unable to load product",
+          description: error instanceof Error ? error.message : "Please try again.",
+          variant: "destructive",
+        });
+      }
+    };
+
+    void loadData();
+    return () => {
+      mounted = false;
+    };
+  }, [id, toast]);
+
+  const gallery = useMemo(() => {
+    if (!product) {
+      return [] as string[];
+    }
+    return [product.image, ...items.filter((item) => item.id !== product.id).slice(0, 3).map((item) => item.image)];
+  }, [items, product]);
+
+  const handleMakeOffer = async () => {
+    if (!product?.price) {
+      return;
+    }
+    try {
+      const offeredPrice = Math.max(1, Math.round(product.price * 0.95));
+      await createOffer({
+        product_id: product.id,
+        offered_price: offeredPrice,
+        note: "Offer sent from product details page",
+      });
+      toast({
+        title: "Offer submitted",
+        description: `Your offer of Rs ${offeredPrice.toLocaleString()} has been sent.`,
+      });
+    } catch (error: unknown) {
+      toast({
+        title: "Offer failed",
+        description: error instanceof Error ? error.message : "Please login and try again.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  if (!product) {
+    return (
+      <div className="min-h-screen">
+        <MarketNavbar />
+        <PageShell>
+          <Card className="rounded-2xl border-border/70 p-6">
+            <p className="text-muted-foreground">Loading product...</p>
+          </Card>
+        </PageShell>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen">
@@ -65,7 +146,7 @@ const ProductDetail = () => {
                   <MessageCircle className="mr-2 h-4 w-4" /> Chat with Seller
                 </Link>
               </Button>
-              <Button variant="secondary" className="rounded-full">
+              <Button variant="secondary" className="rounded-full" onClick={handleMakeOffer}>
                 <Repeat2 className="mr-2 h-4 w-4" /> Make Offer
               </Button>
             </div>

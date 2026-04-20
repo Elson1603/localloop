@@ -1,6 +1,7 @@
 import { AnimatePresence, motion } from "framer-motion";
 import { ImagePlus, Sparkles, UploadCloud, X, Zap } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { MarketNavbar } from "@/components/localloop/MarketNavbar";
 import { PageShell } from "@/components/localloop/PageShell";
 import { Button } from "@/components/ui/button";
@@ -10,19 +11,23 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
+import { createProduct } from "@/lib/api";
+import { makePlaceholderImage } from "@/lib/marketplace";
 import { categories } from "@/data/mockData";
 
 const PostItem = () => {
+  const navigate = useNavigate();
   const { toast } = useToast();
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [price, setPrice] = useState("");
+  const [location, setLocation] = useState("");
   const [category, setCategory] = useState("");
   const [barterEnabled, setBarterEnabled] = useState(false);
   const [files, setFiles] = useState<File[]>([]);
   const [dragActive, setDragActive] = useState(false);
-  const [errors, setErrors] = useState<{ title?: string; description?: string; category?: string; images?: string }>({});
+  const [errors, setErrors] = useState<{ title?: string; description?: string; category?: string; images?: string; price?: string; location?: string }>({});
   const [isPublishing, setIsPublishing] = useState(false);
 
   const handleFileSelect = (selected: FileList | null) => {
@@ -54,13 +59,16 @@ const PostItem = () => {
     return `Suggested ₹${floor.toLocaleString()}–₹${ceil.toLocaleString()} based on nearby listings.`;
   }, [price]);
 
-  const onSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+  const onSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+    const numericPrice = Number(price);
     const nextErrors = {
       title: title.trim() ? undefined : "Title is required",
       description: description.trim().length >= 20 ? undefined : "Description should be at least 20 characters",
       category: category ? undefined : "Please choose a category",
       images: files.length ? undefined : "Upload at least one image",
+      price: numericPrice > 0 ? undefined : "Price must be greater than 0",
+      location: location.trim() ? undefined : "Location is required",
     };
     setErrors(nextErrors);
 
@@ -75,10 +83,26 @@ const PostItem = () => {
     }
 
     setIsPublishing(true);
-    setTimeout(() => {
+    try {
+      await createProduct({
+        title: title.trim(),
+        description: description.trim(),
+        category,
+        price: numericPrice,
+        location: location.trim(),
+        image_urls: [makePlaceholderImage(title)],
+      });
       setIsPublishing(false);
-      toast({ title: "Listing ready", description: "Your item has been staged successfully." });
-    }, 850);
+      toast({ title: "Listing published", description: "Your item is now live in marketplace." });
+      navigate("/listings");
+    } catch (error: unknown) {
+      setIsPublishing(false);
+      toast({
+        title: "Publish failed",
+        description: error instanceof Error ? error.message : "Please login and try again.",
+        variant: "destructive",
+      });
+    }
   };
 
   return (
@@ -182,6 +206,12 @@ const PostItem = () => {
                 <div className="space-y-2">
                   <Label htmlFor="price">Price (optional)</Label>
                   <Input id="price" type="number" placeholder="e.g. 500" value={price} onChange={(e) => setPrice(e.target.value)} />
+                  {errors.price && <p className="text-sm text-destructive">{errors.price}</p>}
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="location">Location</Label>
+                  <Input id="location" placeholder="e.g. Indiranagar" value={location} onChange={(e) => setLocation(e.target.value)} />
+                  {errors.location && <p className="text-sm text-destructive">{errors.location}</p>}
                 </div>
                 <div className="space-y-2">
                   <Label>Category</Label>

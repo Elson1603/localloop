@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { MarketNavbar } from "@/components/localloop/MarketNavbar";
 import { PageShell } from "@/components/localloop/PageShell";
 import { ProductCard } from "@/components/localloop/ProductCard";
@@ -8,13 +8,40 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
-import { categories, items } from "@/data/mockData";
+import type { MarketplaceItem } from "@/data/mockData";
+import { categories } from "@/data/mockData";
+import { listProducts } from "@/lib/api";
+import { toMarketplaceItem } from "@/lib/marketplace";
 
 const Listings = () => {
   const [maxPrice, setMaxPrice] = useState(45000);
   const [distance, setDistance] = useState([10]);
   const [category, setCategory] = useState("all");
   const [barterOnly, setBarterOnly] = useState(false);
+  const [items, setItems] = useState<MarketplaceItem[]>([]);
+
+  useEffect(() => {
+    let mounted = true;
+    const loadProducts = async () => {
+      try {
+        const products = await listProducts();
+        if (!mounted) {
+          return;
+        }
+        setItems(products.map(toMarketplaceItem));
+      } catch {
+        if (!mounted) {
+          return;
+        }
+        setItems([]);
+      }
+    };
+
+    void loadProducts();
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   const filtered = useMemo(
     () =>

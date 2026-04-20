@@ -1,14 +1,94 @@
 import { SendHorizontal } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { MarketNavbar } from "@/components/localloop/MarketNavbar";
 import { PageShell } from "@/components/localloop/PageShell";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { chatMessages } from "@/data/mockData";
+import { useToast } from "@/hooks/use-toast";
+import { createChatMessage, listChatMessages } from "@/lib/api";
 
 const Chat = () => {
+  const { toast } = useToast();
+  const chatId = "marketplace-global-chat";
   const [message, setMessage] = useState("");
+  const [messages, setMessages] = useState<Array<{ id: string; fromMe: boolean; text: string; time: string }>>([]);
+
+  const myUserId = useMemo(() => {
+    const token = localStorage.getItem("localloop_id_token");
+    if (!token) {
+      return "";
+    }
+    try {
+      const payload = JSON.parse(atob(token.split(".")[1])) as { sub?: string };
+      return payload.sub || "";
+    } catch {
+      return "";
+    }
+  }, []);
+
+  useEffect(() => {
+    let mounted = true;
+    const loadMessages = async () => {
+      try {
+        const apiMessages = await listChatMessages(chatId);
+        if (!mounted) {
+          return;
+        }
+        setMessages(
+          apiMessages.map((msg) => ({
+            id: msg.message_id,
+            fromMe: msg.sender_user_id === myUserId,
+            text: msg.message,
+            time: new Date(msg.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+          })),
+        );
+      } catch {
+        if (!mounted) {
+          return;
+        }
+        setMessages([]);
+      }
+    };
+
+    void loadMessages();
+    return () => {
+      mounted = false;
+    };
+  }, [chatId, myUserId]);
+
+  const onSendMessage = async (event: React.FormEvent) => {
+    event.preventDefault();
+    const text = message.trim();
+    if (!text) {
+      return;
+    }
+
+    try {
+      await createChatMessage({
+        chat_id: chatId,
+        recipient_user_id: "marketplace-peer",
+        message: text,
+      });
+
+      const apiMessages = await listChatMessages(chatId);
+      setMessages(
+        apiMessages.map((msg) => ({
+          id: msg.message_id,
+          fromMe: msg.sender_user_id === myUserId,
+          text: msg.message,
+          time: new Date(msg.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+        })),
+      );
+      setMessage("");
+    } catch (error: unknown) {
+      toast({
+        title: "Unable to send",
+        description: error instanceof Error ? error.message : "Please login and try again.",
+        variant: "destructive",
+      });
+    }
+  };
 
   return (
     <div className="min-h-screen">
@@ -46,7 +126,7 @@ const Chat = () => {
             </div>
 
             <div className="flex-1 space-y-3 overflow-y-auto p-4">
-              {chatMessages.map((msg) => (
+              {messages.map((msg) => (
                 <div key={msg.id} className={`flex ${msg.fromMe ? "justify-end" : "justify-start"}`}>
                   <div className={`max-w-[78%] rounded-2xl px-4 py-2 ${msg.fromMe ? "bg-primary text-primary-foreground" : "bg-secondary text-foreground"}`}>
                     <p className="text-sm">{msg.text}</p>
@@ -56,7 +136,7 @@ const Chat = () => {
               ))}
             </div>
 
-            <form className="flex gap-2 border-t border-border/70 p-3" onSubmit={(e) => e.preventDefault()}>
+            <form className="flex gap-2 border-t border-border/70 p-3" onSubmit={onSendMessage}>
               <Input value={message} onChange={(e) => setMessage(e.target.value)} placeholder="Type your message..." className="rounded-full" />
               <Button className="rounded-full bg-primary text-primary-foreground hover:bg-primary/90">
                 <SendHorizontal className="h-4 w-4" />

@@ -112,3 +112,75 @@ Login:
   "password": "StrongPass123!"
 }
 ```
+
+## 7) DynamoDB setup (Users, Products, Chats, Offers)
+
+Create these 4 DynamoDB tables in the same AWS region as your backend:
+
+1. `LocalLoopUsers`
+   - Partition key: `user_id` (String)
+2. `LocalLoopProducts`
+   - Partition key: `product_id` (String)
+3. `LocalLoopChats`
+   - Partition key: `message_id` (String)
+4. `LocalLoopOffers`
+   - Partition key: `offer_id` (String)
+
+Recommended table settings for MVP:
+
+- Billing mode: `On-demand`
+- Point-in-time recovery: `Enabled`
+- Encryption: `AWS owned key` (default is fine)
+
+### AWS Console steps
+
+1. Open AWS Console -> DynamoDB -> Tables -> Create table.
+2. Enter table name and partition key for each table above.
+3. Keep sort key empty for this phase.
+4. Set table class to `Standard`.
+5. Repeat until all 4 tables are created.
+
+### Environment variables
+
+Set these values in `.env` (or keep defaults from `.env.example`):
+
+- `DYNAMODB_USERS_TABLE`
+- `DYNAMODB_PRODUCTS_TABLE`
+- `DYNAMODB_CHATS_TABLE`
+- `DYNAMODB_OFFERS_TABLE`
+
+### IAM permissions required
+
+Add these DynamoDB actions to the IAM user/role used by backend:
+
+- `dynamodb:PutItem`
+- `dynamodb:GetItem`
+- `dynamodb:Scan`
+- `dynamodb:UpdateItem`
+
+Limit resources to the 4 table ARNs for production.
+
+## 8) New DynamoDB-backed endpoints
+
+Users:
+
+- `PUT /api/v1/users/me`
+- `GET /api/v1/users/me`
+
+Products:
+
+- `POST /api/v1/products`
+- `GET /api/v1/products`
+- `GET /api/v1/products/{product_id}`
+
+Chats:
+
+- `POST /api/v1/chats/messages`
+- `GET /api/v1/chats/messages?chat_id=<chat_id>`
+
+Offers:
+
+- `POST /api/v1/offers`
+- `GET /api/v1/offers`
+
+All endpoints above should be called with Cognito Bearer token where required.

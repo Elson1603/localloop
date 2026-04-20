@@ -16,6 +16,15 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 cognito_service = CognitoService()
 
 
+def _login_error_status(exc: ClientError) -> int:
+    code = exc.response.get("Error", {}).get("Code", "")
+    if code == "UserNotConfirmedException":
+        return status.HTTP_403_FORBIDDEN
+    if code in {"InvalidParameterException", "ResourceNotFoundException"}:
+        return status.HTTP_400_BAD_REQUEST
+    return status.HTTP_401_UNAUTHORIZED
+
+
 @router.post("/signup", response_model=MessageResponse, status_code=status.HTTP_201_CREATED)
 def signup(payload: SignUpRequest) -> MessageResponse:
     try:
@@ -50,7 +59,7 @@ def login(payload: LoginRequest) -> AuthTokensResponse:
             token_type=auth_result.get("TokenType", "Bearer"),
         )
     except ClientError as exc:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=parse_cognito_error(exc)) from exc
+        raise HTTPException(status_code=_login_error_status(exc), detail=parse_cognito_error(exc)) from exc
 
 
 @router.get("/me", response_model=CurrentUserResponse)
