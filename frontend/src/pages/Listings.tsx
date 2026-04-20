@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useLocation } from "react-router-dom";
 import { MarketNavbar } from "@/components/localloop/MarketNavbar";
 import { PageShell } from "@/components/localloop/PageShell";
 import { ProductCard } from "@/components/localloop/ProductCard";
@@ -11,14 +12,29 @@ import { Switch } from "@/components/ui/switch";
 import type { MarketplaceItem } from "@/data/mockData";
 import { categories } from "@/data/mockData";
 import { listProducts } from "@/lib/api";
+import { distanceInKm, getLocationCoordinates, getSavedUserCoordinates, type Coordinates } from "@/lib/location";
 import { toMarketplaceItem } from "@/lib/marketplace";
 
 const Listings = () => {
+  const location = useLocation();
   const [maxPrice, setMaxPrice] = useState(45000);
   const [distance, setDistance] = useState([10]);
   const [category, setCategory] = useState("all");
   const [barterOnly, setBarterOnly] = useState(false);
   const [items, setItems] = useState<MarketplaceItem[]>([]);
+  const [userCoords, setUserCoords] = useState<Coordinates | null>(null);
+
+  useEffect(() => {
+    setUserCoords(getSavedUserCoordinates());
+  }, [location.search]);
+
+  const nearbyRequested = useMemo(() => new URLSearchParams(location.search).get("nearby") === "1", [location.search]);
+
+  useEffect(() => {
+    if (nearbyRequested) {
+      setDistance([8]);
+    }
+  }, [nearbyRequested]);
 
   useEffect(() => {
     let mounted = true;
@@ -28,7 +44,21 @@ const Listings = () => {
         if (!mounted) {
           return;
         }
-        setItems(products.map(toMarketplaceItem));
+        const mapped = products.map(toMarketplaceItem);
+        if (!userCoords) {
+          setItems(mapped);
+          return;
+        }
+
+        const withDistances = mapped.map((item) => {
+          const itemCoords = getLocationCoordinates(item.location);
+          const computedDistance = distanceInKm(userCoords, itemCoords);
+          return {
+            ...item,
+            distanceKm: Number(computedDistance.toFixed(1)),
+          };
+        });
+        setItems(withDistances);
       } catch {
         if (!mounted) {
           return;
@@ -41,7 +71,7 @@ const Listings = () => {
     return () => {
       mounted = false;
     };
-  }, []);
+  }, [userCoords]);
 
   const filtered = useMemo(
     () =>
@@ -51,7 +81,7 @@ const Listings = () => {
         const byDistance = item.distanceKm <= distance[0];
         const byBarter = barterOnly ? item.barterAvailable : true;
         return byCategory && byPrice && byDistance && byBarter;
-      }),
+      }).sort((first, second) => first.distanceKm - second.distanceKm),
     [category, maxPrice, distance, barterOnly],
   );
 
@@ -96,7 +126,7 @@ const Listings = () => {
 
         <div className="mt-4 flex items-center justify-between">
           <p className="text-sm text-muted-foreground">{filtered.length} results near you</p>
-          <Badge className="bg-accent/20 text-accent-foreground">Hyperlocal</Badge>
+          <Badge className="bg-accent/20 text-accent-foreground">{userCoords ? "Nearby mode on" : "Hyperlocal"}</Badge>
         </div>
 
         <section className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">

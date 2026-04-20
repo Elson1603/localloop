@@ -60,9 +60,20 @@ const authHeaders = (): HeadersInit => {
 
 const parseError = async (response: Response): Promise<string> => {
   try {
-    const data = (await response.json()) as { detail?: string };
-    if (data?.detail) {
-      return data.detail;
+    const data = (await response.json()) as { detail?: unknown };
+    const detail = data?.detail;
+    if (typeof detail === "string" && detail.trim()) {
+      return detail;
+    }
+    if (Array.isArray(detail) && detail.length > 0) {
+      const first = detail[0] as { msg?: string };
+      if (typeof first?.msg === "string" && first.msg.trim()) {
+        return first.msg;
+      }
+      return JSON.stringify(detail);
+    }
+    if (detail && typeof detail === "object") {
+      return JSON.stringify(detail);
     }
   } catch {
     // ignore

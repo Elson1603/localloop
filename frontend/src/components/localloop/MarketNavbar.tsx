@@ -1,9 +1,11 @@
 import { Bell, MapPin, Moon, Plus, Search, Sun, User } from "lucide-react";
 import { useEffect, useState } from "react";
-import { Link, NavLink, useLocation } from "react-router-dom";
+import { Link, NavLink, useLocation, useNavigate } from "react-router-dom";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { useToast } from "@/hooks/use-toast";
+import { requestCurrentPosition, saveUserCoordinates } from "@/lib/location";
 
 const links = [
   { to: "/", label: "Home" },
@@ -16,6 +18,9 @@ export const MarketNavbar = () => {
   const [dark, setDark] = useState(false);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [profileInitials, setProfileInitials] = useState("LL");
+  const [isLocating, setIsLocating] = useState(false);
+  const { toast } = useToast();
+  const navigate = useNavigate();
   const location = useLocation();
   const protectedPaths = new Set(["/chat", "/profile", "/post"]);
   const shouldShowInlinePost = location.pathname !== "/post" && location.pathname !== "/auth";
@@ -88,6 +93,31 @@ export const MarketNavbar = () => {
     setDark(root.classList.contains("dark"));
   };
 
+  const goNearby = async () => {
+    if (isLocating) {
+      return;
+    }
+
+    try {
+      setIsLocating(true);
+      const coords = await requestCurrentPosition();
+      saveUserCoordinates(coords);
+      navigate("/listings?nearby=1");
+      toast({
+        title: "Nearby enabled",
+        description: "Showing products closest to your current location.",
+      });
+    } catch (error: unknown) {
+      toast({
+        title: "Location unavailable",
+        description: error instanceof Error ? error.message : "Please enable location access and try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsLocating(false);
+    }
+  };
+
   return (
     <header className="sticky top-0 z-40 border-b border-border/70 bg-background/80 backdrop-blur-xl">
       <div className="container flex flex-col gap-3 py-3 md:flex-row md:items-center md:justify-between">
@@ -126,8 +156,8 @@ export const MarketNavbar = () => {
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <Input className="rounded-full pl-9" placeholder="Search nearby items" />
           </div>
-          <Button variant="secondary" className="rounded-full">
-            <MapPin className="mr-2 h-4 w-4" /> Nearby
+          <Button variant="secondary" className="rounded-full" onClick={() => void goNearby()} disabled={isLocating}>
+            <MapPin className="mr-2 h-4 w-4" /> {isLocating ? "Locating..." : "Nearby"}
           </Button>
           {shouldShowInlinePost ? (
             <Button asChild className="rounded-full bg-accent text-accent-foreground hover:bg-accent/90">

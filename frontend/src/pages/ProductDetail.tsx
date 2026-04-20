@@ -12,6 +12,25 @@ import { useToast } from "@/hooks/use-toast";
 import { createOffer, getProduct, listProducts } from "@/lib/api";
 import { toMarketplaceItem } from "@/lib/marketplace";
 
+const decodeTokenSub = (): string => {
+  const token = localStorage.getItem("localloop_id_token");
+  if (!token) {
+    return "";
+  }
+  try {
+    const payload = token.split(".")[1];
+    if (!payload) {
+      return "";
+    }
+    const normalized = payload.replace(/-/g, "+").replace(/_/g, "/");
+    const decoded = atob(normalized);
+    const parsed = JSON.parse(decoded) as { sub?: string };
+    return parsed.sub || "";
+  } catch {
+    return "";
+  }
+};
+
 const ProductDetail = () => {
   const { toast } = useToast();
   const { id } = useParams();
@@ -19,8 +38,10 @@ const ProductDetail = () => {
   const location = useLocation();
   const [items, setItems] = useState<MarketplaceItem[]>([]);
   const [product, setProduct] = useState<MarketplaceItem | null>(null);
+  const [sellerUserId, setSellerUserId] = useState("");
   const [selectedImage, setSelectedImage] = useState("");
   const isAuthenticated = Boolean(localStorage.getItem("localloop_access_token"));
+  const myUserId = decodeTokenSub();
 
   useEffect(() => {
     let mounted = true;
@@ -35,6 +56,7 @@ const ProductDetail = () => {
         }
         const mappedProduct = toMarketplaceItem(productData);
         setProduct(mappedProduct);
+        setSellerUserId(productData.owner_id || "");
         setSelectedImage(mappedProduct.image);
         setItems(allProducts.map(toMarketplaceItem));
       } catch (error: unknown) {
@@ -61,6 +83,14 @@ const ProductDetail = () => {
     }
     return [product.image, ...items.filter((item) => item.id !== product.id).slice(0, 3).map((item) => item.image)];
   }, [items, product]);
+
+  const mapEmbedUrl = useMemo(() => {
+    if (!product?.location) {
+      return "";
+    }
+    const query = encodeURIComponent(`${product.location}, India`);
+    return `https://maps.google.com/maps?q=${query}&z=14&output=embed`;
+  }, [product?.location]);
 
   const handleMakeOffer = async () => {
     if (!isAuthenticated) {
@@ -109,6 +139,10 @@ const ProductDetail = () => {
     );
   }
 
+  const chatPath = isAuthenticated
+    ? `/chat?productId=${encodeURIComponent(product.id)}&sellerId=${encodeURIComponent(sellerUserId)}&buyerId=${encodeURIComponent(myUserId)}&sellerName=${encodeURIComponent(product.seller.name)}`
+    : `/auth?returnTo=${encodeURIComponent(`${location.pathname}${location.search}`)}`;
+
   return (
     <div className="min-h-screen">
       <MarketNavbar />
@@ -149,13 +183,25 @@ const ProductDetail = () => {
               <p className="mb-2 inline-flex items-center gap-1 text-sm text-muted-foreground">
                 <MapPin className="h-4 w-4" /> {product.location} · {product.distanceKm} km away
               </p>
-              <div className="h-36 rounded-xl border border-dashed border-border bg-muted/40" />
-              <p className="mt-2 text-xs text-muted-foreground">Location map preview</p>
+              {mapEmbedUrl ? (
+                <div className="overflow-hidden rounded-xl border border-border/70 bg-muted/40">
+                  <iframe
+                    title={`Map preview for ${product.location}`}
+                    src={mapEmbedUrl}
+                    className="h-44 w-full"
+                    loading="lazy"
+                    referrerPolicy="no-referrer-when-downgrade"
+                  />
+                </div>
+              ) : (
+                <div className="h-44 rounded-xl border border-dashed border-border bg-muted/40" />
+              )}
+              <p className="mt-2 text-xs text-muted-foreground">Interactive location map preview</p>
             </Card>
 
             <div className="flex flex-wrap gap-3">
               <Button asChild className="rounded-full bg-primary text-primary-foreground hover:bg-primary/90">
-                <Link to={isAuthenticated ? "/chat" : `/auth?returnTo=${encodeURIComponent(`${location.pathname}${location.search}`)}`}>
+                <Link to={chatPath}>
                   <MessageCircle className="mr-2 h-4 w-4" /> Chat with Seller
                 </Link>
               </Button>
