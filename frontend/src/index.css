@@ -1,0 +1,149 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 220 20% 97%;
+    --foreground: 227 33% 15%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 227 33% 15%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 227 33% 15%;
+
+    --primary: 233 72% 40%;
+    --primary-foreground: 210 40% 98%;
+    --primary-glow: 228 84% 62%;
+
+    --secondary: 220 24% 93%;
+    --secondary-foreground: 227 28% 22%;
+
+    --muted: 220 20% 92%;
+    --muted-foreground: 226 15% 42%;
+
+    --accent: 149 88% 46%;
+    --accent-foreground: 221 39% 14%;
+
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 210 40% 98%;
+
+    --border: 220 20% 86%;
+    --input: 220 20% 88%;
+    --ring: 233 72% 40%;
+
+    --radius: 1rem;
+
+    --sidebar-background: 220 30% 96%;
+    --sidebar-foreground: 227 33% 15%;
+    --sidebar-primary: 233 72% 40%;
+    --sidebar-primary-foreground: 210 40% 98%;
+    --sidebar-accent: 220 22% 91%;
+    --sidebar-accent-foreground: 227 33% 15%;
+    --sidebar-border: 220 20% 84%;
+    --sidebar-ring: 233 72% 40%;
+
+    --gradient-brand: linear-gradient(135deg, hsl(var(--primary)) 0%, hsl(var(--primary-glow)) 55%, hsl(var(--accent)) 100%);
+    --gradient-surface: linear-gradient(180deg, hsl(var(--background)) 0%, hsl(220 30% 95%) 100%);
+    --shadow-soft: 0 10px 40px -22px hsl(var(--primary) / 0.35);
+    --shadow-card: 0 12px 30px -16px hsl(227 33% 15% / 0.14);
+  }
+
+  .dark {
+    --background: 230 23% 8%;
+    --foreground: 215 29% 92%;
+
+    --card: 230 20% 13%;
+    --card-foreground: 215 29% 92%;
+
+    --popover: 230 20% 13%;
+    --popover-foreground: 215 29% 92%;
+
+    --primary: 227 87% 66%;
+    --primary-foreground: 230 23% 8%;
+    --primary-glow: 213 90% 69%;
+
+    --secondary: 229 17% 18%;
+    --secondary-foreground: 215 24% 88%;
+
+    --muted: 229 16% 18%;
+    --muted-foreground: 220 14% 65%;
+
+    --accent: 149 76% 53%;
+    --accent-foreground: 230 23% 8%;
+
+    --destructive: 0 62% 44%;
+    --destructive-foreground: 210 40% 98%;
+
+    --border: 229 17% 25%;
+    --input: 229 17% 25%;
+    --ring: 227 87% 66%;
+
+    --sidebar-background: 230 23% 10%;
+    --sidebar-foreground: 215 29% 92%;
+    --sidebar-primary: 227 87% 66%;
+    --sidebar-primary-foreground: 230 23% 8%;
+    --sidebar-accent: 229 17% 18%;
+    --sidebar-accent-foreground: 215 29% 92%;
+    --sidebar-border: 229 17% 24%;
+    --sidebar-ring: 227 87% 66%;
+
+    --gradient-brand: linear-gradient(135deg, hsl(var(--primary)) 0%, hsl(var(--primary-glow)) 58%, hsl(var(--accent)) 100%);
+    --gradient-surface: linear-gradient(180deg, hsl(var(--background)) 0%, hsl(230 23% 10%) 100%);
+    --shadow-soft: 0 16px 50px -28px hsl(var(--primary) / 0.45);
+    --shadow-card: 0 18px 44px -20px hsl(230 23% 3% / 0.7);
+  }
+
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground antialiased;
+    background-image: radial-gradient(circle at 15% 12%, hsl(var(--primary) / 0.08) 0%, transparent 40%), radial-gradient(circle at 85% 25%, hsl(var(--accent) / 0.1) 0%, transparent 42%), var(--gradient-surface);
+    font-family: "Inter", "Poppins", system-ui, sans-serif;
+  }
+}
+
+@layer components {
+  .glass {
+    @apply border border-border/70 bg-card/65 backdrop-blur-xl;
+    box-shadow: var(--shadow-card);
+  }
+
+  .brand-gradient {
+    background-image: var(--gradient-brand);
+  }
+
+  .focus-ring {
+    @apply outline-none ring-2 ring-ring/50 ring-offset-2 ring-offset-background;
+  }
+
+  .card-hover {
+    @apply transition-all duration-300 hover:-translate-y-1 hover:shadow-lg;
+    box-shadow: var(--shadow-card);
+  }
+
+  .skeleton-shimmer {
+    @apply relative overflow-hidden bg-muted;
+  }
+
+  .skeleton-shimmer::after {
+    content: "";
+    @apply absolute inset-y-0 -left-full w-1/2;
+    background: linear-gradient(90deg, transparent, hsl(var(--background) / 0.65), transparent);
+    animation: shimmer 1.4s infinite;
+  }
+
+  .text-brand {
+    background-image: var(--gradient-brand);
+    @apply bg-clip-text text-transparent;
+  }
+}
+
+@layer utilities {
+  .transition-smooth {
+    @apply transition-all duration-300 ease-out;
+  }
+}
