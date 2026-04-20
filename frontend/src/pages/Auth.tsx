@@ -1,6 +1,6 @@
 import { FormEvent, useMemo, useState } from "react";
 import { Github, Mail } from "lucide-react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -45,6 +45,7 @@ const parseApiError = async (response: Response): Promise<string> => {
 
 const Auth = () => {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { toast } = useToast();
 
   const [mode, setMode] = useState<AuthMode>("login");
@@ -201,7 +202,8 @@ const Auth = () => {
         title: "Login successful",
         description: "Welcome back to LocalLoop.",
       });
-      navigate("/");
+      const returnTo = searchParams.get("returnTo");
+      navigate(returnTo || "/");
     } catch (error: unknown) {
       toast({
         title: mode === "login" ? "Login failed" : "Signup failed",

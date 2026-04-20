@@ -1,7 +1,7 @@
 from datetime import datetime, timezone
 from uuid import uuid4
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 
 from app.core.config import get_settings
 from app.core.dynamodb import scan_with_optional_filter, serialize_dynamo, get_table
@@ -38,7 +38,15 @@ def list_chat_messages(
     chat_id: str | None = Query(default=None),
     sender_user_id: str | None = Query(default=None),
     recipient_user_id: str | None = Query(default=None),
+    current_user: dict = Depends(get_current_user),
 ) -> list[ChatMessageResponse]:
+    current_user_id = current_user.get("sub", "")
+
+    if sender_user_id and sender_user_id != current_user_id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You can only read your own messages")
+    if recipient_user_id and recipient_user_id != current_user_id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You can only read your own messages")
+
     table = get_table(settings.chats_table_name)
     response = scan_with_optional_filter(
         table,
@@ -49,5 +57,10 @@ def list_chat_messages(
         },
     )
     items = response.get("Items", [])
-    sorted_items = sorted(items, key=lambda item: item.get("created_at", ""))
+    visible_items = [
+        item
+        for item in items
+        if item.get("sender_user_id") == current_user_id or item.get("recipient_user_id") == current_user_id
+    ]
+    sorted_items = sorted(visible_items, key=lambda item: item.get("created_at", ""))
     return [ChatMessageResponse(**serialize_dynamo(item)) for item in sorted_items]

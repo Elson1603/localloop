@@ -187,7 +187,11 @@ export const listChatMessages = async (params: {
     query.set("recipient_user_id", params.recipientUserId);
   }
 
-  const response = await fetch(`${API_BASE_URL}/api/v1/chats/messages?${query.toString()}`);
+  const response = await fetch(`${API_BASE_URL}/api/v1/chats/messages?${query.toString()}`, {
+    headers: {
+      ...authHeaders(),
+    },
+  });
   if (!response.ok) {
     throw new Error(await parseError(response));
   }

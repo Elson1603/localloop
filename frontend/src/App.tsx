@@ -1,6 +1,6 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { AnimatePresence, motion } from "framer-motion";
-import { BrowserRouter, Route, Routes } from "react-router-dom";
+import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { useLocation } from "react-router-dom";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { Toaster } from "@/components/ui/toaster";
@@ -13,6 +13,19 @@ import NotFound from "./pages/NotFound";
 import PostItem from "./pages/PostItem";
 import ProductDetail from "./pages/ProductDetail";
 import Profile from "./pages/Profile";
+
+const isAuthenticated = (): boolean => Boolean(localStorage.getItem("localloop_access_token"));
+
+const ProtectedRoute = ({ children }: { children: JSX.Element }) => {
+  const location = useLocation();
+
+  if (!isAuthenticated()) {
+    const returnTo = `${location.pathname}${location.search}`;
+    return <Navigate to={`/auth?returnTo=${encodeURIComponent(returnTo)}`} replace />;
+  }
+
+  return children;
+};
 
 const queryClient = new QueryClient();
 
@@ -32,9 +45,9 @@ const AppRoutes = () => {
           <Route path="/" element={<Index />} />
           <Route path="/listings" element={<Listings />} />
           <Route path="/listings/:id" element={<ProductDetail />} />
-          <Route path="/chat" element={<Chat />} />
-          <Route path="/post" element={<PostItem />} />
-          <Route path="/profile" element={<Profile />} />
+          <Route path="/chat" element={<ProtectedRoute><Chat /></ProtectedRoute>} />
+          <Route path="/post" element={<ProtectedRoute><PostItem /></ProtectedRoute>} />
+          <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
           <Route path="/auth" element={<Auth />} />
           <Route path="*" element={<NotFound />} />
         </Routes>

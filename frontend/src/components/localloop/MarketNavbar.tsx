@@ -17,6 +17,7 @@ export const MarketNavbar = () => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [profileInitials, setProfileInitials] = useState("LL");
   const location = useLocation();
+  const protectedPaths = new Set(["/chat", "/profile", "/post"]);
   const shouldShowInlinePost = location.pathname !== "/post" && location.pathname !== "/auth";
 
   useEffect(() => {
@@ -97,9 +98,15 @@ export const MarketNavbar = () => {
           </Link>
           <nav className="hidden items-center gap-1 md:flex">
             {links.map((link) => (
+              (() => {
+                const to = !isAuthenticated && protectedPaths.has(link.to)
+                  ? `/auth?returnTo=${encodeURIComponent(link.to)}`
+                  : link.to;
+
+                return (
               <NavLink
                 key={link.to}
-                to={link.to}
+                to={to}
                 className={({ isActive }) =>
                   `rounded-full px-3 py-1.5 text-sm transition-smooth ${
                     isActive ? "bg-secondary text-foreground" : "text-muted-foreground hover:bg-secondary/70"
@@ -108,6 +115,8 @@ export const MarketNavbar = () => {
               >
                 {link.label}
               </NavLink>
+                );
+              })()
             ))}
           </nav>
         </div>
@@ -122,7 +131,7 @@ export const MarketNavbar = () => {
           </Button>
           {shouldShowInlinePost ? (
             <Button asChild className="rounded-full bg-accent text-accent-foreground hover:bg-accent/90">
-              <Link to="/post">
+              <Link to={isAuthenticated ? "/post" : `/auth?returnTo=${encodeURIComponent("/post")}`}>
                 <Plus className="mr-2 h-4 w-4" /> Post Item
               </Link>
             </Button>

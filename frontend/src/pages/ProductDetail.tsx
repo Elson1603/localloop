@@ -1,6 +1,6 @@
 import { MapPin, MessageCircle, Repeat2, Star } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import { MarketNavbar } from "@/components/localloop/MarketNavbar";
 import { PageShell } from "@/components/localloop/PageShell";
 import { ProductCard } from "@/components/localloop/ProductCard";
@@ -15,9 +15,12 @@ import { toMarketplaceItem } from "@/lib/marketplace";
 const ProductDetail = () => {
   const { toast } = useToast();
   const { id } = useParams();
+  const navigate = useNavigate();
+  const location = useLocation();
   const [items, setItems] = useState<MarketplaceItem[]>([]);
   const [product, setProduct] = useState<MarketplaceItem | null>(null);
   const [selectedImage, setSelectedImage] = useState("");
+  const isAuthenticated = Boolean(localStorage.getItem("localloop_access_token"));
 
   useEffect(() => {
     let mounted = true;
@@ -60,6 +63,16 @@ const ProductDetail = () => {
   }, [items, product]);
 
   const handleMakeOffer = async () => {
+    if (!isAuthenticated) {
+      toast({
+        title: "Login required",
+        description: "Please login to make an offer.",
+        variant: "destructive",
+      });
+      navigate(`/auth?returnTo=${encodeURIComponent(`${location.pathname}${location.search}`)}`);
+      return;
+    }
+
     if (!product?.price) {
       return;
     }
@@ -142,7 +155,7 @@ const ProductDetail = () => {
 
             <div className="flex flex-wrap gap-3">
               <Button asChild className="rounded-full bg-primary text-primary-foreground hover:bg-primary/90">
-                <Link to="/chat">
+                <Link to={isAuthenticated ? "/chat" : `/auth?returnTo=${encodeURIComponent(`${location.pathname}${location.search}`)}`}>
                   <MessageCircle className="mr-2 h-4 w-4" /> Chat with Seller
                 </Link>
               </Button>

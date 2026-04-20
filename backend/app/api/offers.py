@@ -1,7 +1,7 @@
 from datetime import datetime, timezone
 from uuid import uuid4
 
-from fastapi import APIRouter, Depends, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 
 from app.core.config import get_settings
 from app.core.dynamodb import get_table, scan_with_optional_filter, serialize_dynamo, to_decimal
@@ -39,8 +39,14 @@ def create_offer(
 def list_offers(
     product_id: str | None = Query(default=None),
     buyer_user_id: str | None = Query(default=None),
+    current_user: dict = Depends(get_current_user),
 ) -> list[OfferResponse]:
+    current_user_id = current_user.get("sub", "")
+    if buyer_user_id and buyer_user_id != current_user_id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You can only view your own offers")
+
     table = get_table(settings.offers_table_name)
-    response = scan_with_optional_filter(table, {"product_id": product_id, "buyer_user_id": buyer_user_id})
+    effective_buyer_user_id = buyer_user_id or (None if product_id else current_user_id)
+    response = scan_with_optional_filter(table, {"product_id": product_id, "buyer_user_id": effective_buyer_user_id})
     items = response.get("Items", [])
     return [OfferResponse(**serialize_dynamo(item)) for item in items]
