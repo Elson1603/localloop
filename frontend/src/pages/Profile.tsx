@@ -1,4 +1,4 @@
-import { Bell, CircleCheck, LogOut, MessageSquare, ShieldCheck, Store, Tag, UserRound } from "lucide-react";
+import { Bell, CircleCheck, HandCoins, LogOut, MessageSquare, ShieldCheck, Store, Tag, UserRound } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { MarketNavbar } from "@/components/localloop/MarketNavbar";
@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
 import { getMyProfile, listChatMessages, listOffers, listProducts } from "@/lib/api";
+import { resolveDisplayName, resolveUsernameHandle } from "@/lib/userIdentity";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8000";
 
@@ -57,7 +58,8 @@ const Profile = () => {
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [activeListings, setActiveListings] = useState(0);
   const [chatThreads, setChatThreads] = useState(0);
-  const [openOffers, setOpenOffers] = useState(0);
+  const [buyingOffers, setBuyingOffers] = useState(0);
+  const [sellingOffersOpen, setSellingOffersOpen] = useState(0);
   const [trustScore, setTrustScore] = useState("New");
 
   const initials = useMemo(() => {
@@ -82,15 +84,31 @@ const Profile = () => {
       const idPayload = idToken ? parseTokenPayload(idToken) : null;
       const tokenUserId = typeof idPayload?.sub === "string" ? idPayload.sub : "";
       const fallbackEmail = typeof idPayload?.email === "string" ? idPayload.email : "";
-      const fallbackName = typeof idPayload?.name === "string" ? idPayload.name : "LocalLoop User";
+      const fallbackName = resolveDisplayName({
+        displayName: typeof idPayload?.name === "string" ? idPayload.name : "",
+        email: fallbackEmail,
+        fallback: "User",
+      });
 
       try {
         const myProfile = await getMyProfile();
+        const resolvedDisplayName = resolveDisplayName({
+          displayName: myProfile.display_name,
+          username: myProfile.username,
+          email: myProfile.email || fallbackEmail,
+          fallback: fallbackName,
+        });
+        const resolvedUsername =
+          resolveUsernameHandle(myProfile.username) ||
+          resolveUsernameHandle(myProfile.email) ||
+          resolveUsernameHandle(fallbackEmail) ||
+          "-";
+
         const mergedProfile: UserProfile = {
           user_id: myProfile.user_id,
           email: myProfile.email || fallbackEmail || "-",
-          username: myProfile.username || fallbackEmail || "-",
-          display_name: myProfile.display_name || fallbackName,
+          username: resolvedUsername,
+          display_name: resolvedDisplayName || fallbackName,
           created_at: myProfile.created_at,
         };
 
@@ -99,12 +117,16 @@ const Profile = () => {
         const scopedUserId = tokenUserId || mergedProfile.user_id;
 
         try {
-          const [products, sentMessages, receivedMessages, offers] = await Promise.all([
+          const [products, sentMessages, receivedMessages, buyerOffers] = await Promise.all([
             listProducts({ ownerId: scopedUserId }),
             listChatMessages({ senderUserId: scopedUserId }),
             listChatMessages({ recipientUserId: scopedUserId }),
             listOffers({ buyerUserId: scopedUserId }),
           ]);
+
+          const offersForOwnedProducts = (
+            await Promise.all(products.map((product) => listOffers({ productId: product.product_id })))
+          ).flat();
 
           const threadIds = new Set<string>([
             ...sentMessages.map((msg) => msg.chat_id),
@@ -113,15 +135,17 @@ const Profile = () => {
 
           setActiveListings(products.length);
           setChatThreads(threadIds.size);
-          setOpenOffers(offers.filter((offer) => offer.status === "pending").length);
+          setBuyingOffers(buyerOffers.length);
+          setSellingOffersOpen(offersForOwnedProducts.filter((offer) => offer.status === "pending").length);
 
-          const completedSignals = products.length + offers.length + threadIds.size;
+          const completedSignals = products.length + buyerOffers.length + offersForOwnedProducts.length + threadIds.size;
           setTrustScore(completedSignals >= 8 ? "Trusted" : completedSignals >= 3 ? "Growing" : "New");
         } catch {
           // Keep profile visible even if dashboard stats fail to load.
           setActiveListings(0);
           setChatThreads(0);
-          setOpenOffers(0);
+          setBuyingOffers(0);
+          setSellingOffersOpen(0);
           setTrustScore("New");
           toast({
             title: "Profile loaded with limited data",
@@ -202,19 +226,45 @@ const Profile = () => {
             <p className="mt-1 text-sm text-muted-foreground">Products you are currently selling</p>
           </Card>
           <Card className="rounded-2xl border-border/70 p-4">
+            <p className="text-xs uppercase tracking-wide text-muted-foreground">Buying Offers</p>
+            <p className="mt-2 text-2xl font-semibold">{buyingOffers}</p>
+            <p className="mt-1 text-sm text-muted-foreground">Offers you have placed as a buyer</p>
+          </Card>
+          <Card className="rounded-2xl border-border/70 p-4">
             <p className="text-xs uppercase tracking-wide text-muted-foreground">Chat Threads</p>
             <p className="mt-2 text-2xl font-semibold">{chatThreads}</p>
             <p className="mt-1 text-sm text-muted-foreground">Buyer and seller conversations</p>
           </Card>
           <Card className="rounded-2xl border-border/70 p-4">
-            <p className="text-xs uppercase tracking-wide text-muted-foreground">Open Offers</p>
-            <p className="mt-2 text-2xl font-semibold">{openOffers}</p>
-            <p className="mt-1 text-sm text-muted-foreground">Negotiations waiting for response</p>
+            <p className="text-xs uppercase tracking-wide text-muted-foreground">Incoming Seller Offers</p>
+            <p className="mt-2 text-2xl font-semibold">{sellingOffersOpen}</p>
+            <p className="mt-1 text-sm text-muted-foreground">Pending offers on your listed products</p>
           </Card>
-          <Card className="rounded-2xl border-border/70 p-4">
-            <p className="text-xs uppercase tracking-wide text-muted-foreground">Trust Score</p>
-            <p className="mt-2 text-2xl font-semibold">{trustScore}</p>
-            <p className="mt-1 text-sm text-muted-foreground">Will improve with successful trades</p>
+        </section>
+
+        <section className="mt-6 grid gap-4 lg:grid-cols-2">
+          <Card className="rounded-2xl border-border/70 p-5">
+            <div className="mb-4 flex items-center gap-2">
+              <Store className="h-4 w-4 text-primary" />
+              <h2 className="text-lg font-semibold">Selling Profile</h2>
+            </div>
+            <div className="space-y-2 text-sm">
+              <p className="flex items-center justify-between"><span className="text-muted-foreground">Active listings</span><span className="font-medium">{activeListings}</span></p>
+              <p className="flex items-center justify-between"><span className="text-muted-foreground">Incoming pending offers</span><span className="font-medium">{sellingOffersOpen}</span></p>
+              <p className="flex items-center justify-between"><span className="text-muted-foreground">Seller trust level</span><span className="font-medium">{trustScore}</span></p>
+            </div>
+          </Card>
+
+          <Card className="rounded-2xl border-border/70 p-5">
+            <div className="mb-4 flex items-center gap-2">
+              <HandCoins className="h-4 w-4 text-primary" />
+              <h2 className="text-lg font-semibold">Buying Profile</h2>
+            </div>
+            <div className="space-y-2 text-sm">
+              <p className="flex items-center justify-between"><span className="text-muted-foreground">Offers placed</span><span className="font-medium">{buyingOffers}</span></p>
+              <p className="flex items-center justify-between"><span className="text-muted-foreground">Active chat threads</span><span className="font-medium">{chatThreads}</span></p>
+              <p className="flex items-center justify-between"><span className="text-muted-foreground">Buyer trust level</span><span className="font-medium">{trustScore}</span></p>
+            </div>
           </Card>
         </section>
 

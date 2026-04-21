@@ -256,3 +256,32 @@ Response includes:
 2. Frontend uploads file directly to S3 using PUT.
 3. Frontend creates product with uploaded `object_key` values.
 4. Backend converts stored object keys to temporary presigned GET URLs when listing/fetching products.
+
+## 10) Backfill old product coordinates
+
+If older products were created before latitude/longitude fields were added, run this script to infer and fill missing coordinates from the existing location text.
+
+Dry run (preview only):
+
+```bash
+python scripts/backfill_product_coordinates.py
+```
+
+Apply updates:
+
+```bash
+python scripts/backfill_product_coordinates.py --apply
+```
+
+Apply updates and force unresolved locations to Bangalore city-center:
+
+```bash
+python scripts/backfill_product_coordinates.py --apply --use-fallback-center
+```
+
+Notes:
+
+- Script updates only products missing valid coordinates.
+- It infers coordinates from:
+   - explicit `Lat <value>, Lng <value>` strings
+   - known neighborhood name mapping (for current seeded localities)

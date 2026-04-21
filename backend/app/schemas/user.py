@@ -16,3 +16,9 @@ class UserProfileResponse(BaseModel):
     location: str | None = None
     created_at: str
     updated_at: str
+
+
+class PublicUserProfileResponse(BaseModel):
+    user_id: str
+    username: str
+    display_name: str

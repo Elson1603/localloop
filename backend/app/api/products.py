@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from app.core.config import get_settings
 from app.core.dynamodb import get_table, scan_with_optional_filter, serialize_dynamo, to_decimal
 from app.core.security import get_current_user
-from app.schemas.product import CreateProductRequest, ProductResponse
+from app.schemas.product import CreateProductRequest, ProductResponse, UpdateProductRequest
 from app.services.s3_service import S3Service
 
 router = APIRouter(prefix="/products", tags=["products"])
@@ -17,6 +17,7 @@ s3_service = S3Service()
 def _with_displayable_images(item: dict) -> dict:
     mapped = dict(item)
     images = mapped.get("image_urls", [])
+    mapped["image_refs"] = [str(image_ref) for image_ref in images]
     mapped["image_urls"] = [s3_service.to_display_url(image_ref) for image_ref in images]
     return mapped
 
@@ -37,6 +38,8 @@ def create_product(
         "category": payload.category,
         "price": to_decimal(payload.price),
         "location": payload.location,
+        "latitude": to_decimal(payload.latitude),
+        "longitude": to_decimal(payload.longitude),
         "image_urls": payload.image_urls,
         "status": "active",
         "created_at": now,
@@ -44,6 +47,43 @@ def create_product(
     }
 
     table = get_table(settings.products_table_name)
+    table.put_item(Item=item)
+    return ProductResponse(**serialize_dynamo(_with_displayable_images(item)))
+
+
+@router.put("/{product_id}", response_model=ProductResponse)
+def update_product(
+    product_id: str,
+    payload: UpdateProductRequest,
+    current_user: dict = Depends(get_current_user),
+) -> ProductResponse:
+    table = get_table(settings.products_table_name)
+    existing = table.get_item(Key={"product_id": product_id}).get("Item")
+    if not existing:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Product not found")
+
+    current_user_id = current_user.get("sub", "")
+    owner_id = str(existing.get("owner_id", ""))
+    if owner_id != current_user_id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You can only edit your own products")
+
+    now = datetime.now(timezone.utc).isoformat()
+    item = {
+        "product_id": product_id,
+        "owner_id": owner_id,
+        "title": payload.title,
+        "description": payload.description,
+        "category": payload.category,
+        "price": to_decimal(payload.price),
+        "location": payload.location,
+        "latitude": to_decimal(payload.latitude),
+        "longitude": to_decimal(payload.longitude),
+        "image_urls": payload.image_urls,
+        "status": existing.get("status", "active"),
+        "created_at": existing.get("created_at", now),
+        "updated_at": now,
+    }
+
     table.put_item(Item=item)
     return ProductResponse(**serialize_dynamo(_with_displayable_images(item)))
 

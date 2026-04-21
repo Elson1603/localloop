@@ -35,7 +35,7 @@ export const items: MarketplaceItem[] = [
     location: "Koramangala",
     image: "https://images.unsplash.com/photo-1556656793-08538906a9f8?auto=format&fit=crop&w=900&q=80",
     description: "128GB, battery health 89%, includes original charger and case.",
-    seller: { name: "Aarav Sharma", rating: 4.8, avatar: "https://i.pravatar.cc/100?img=12" },
+    seller: { name: "Aarav Sharma", rating: 4.8, avatar: "" },
   },
   {
     id: "2",
@@ -47,7 +47,7 @@ export const items: MarketplaceItem[] = [
     location: "Indiranagar",
     image: "https://images.unsplash.com/photo-1518455027359-f3f8164ba6bd?auto=format&fit=crop&w=900&q=80",
     description: "Solid teak wood desk, ideal for compact workspaces.",
-    seller: { name: "Priya Nair", rating: 4.7, avatar: "https://i.pravatar.cc/100?img=32" },
+    seller: { name: "Priya Nair", rating: 4.7, avatar: "" },
   },
   {
     id: "3",
@@ -59,7 +59,7 @@ export const items: MarketplaceItem[] = [
     location: "HSR Layout",
     image: "https://images.unsplash.com/photo-1521587760476-6c12a4b040da?auto=format&fit=crop&w=900&q=80",
     description: "Two bestselling productivity books, almost new condition.",
-    seller: { name: "Neel Shah", rating: 4.9, avatar: "https://i.pravatar.cc/100?img=15" },
+    seller: { name: "Neel Shah", rating: 4.9, avatar: "" },
   },
   {
     id: "4",
@@ -71,7 +71,7 @@ export const items: MarketplaceItem[] = [
     location: "JP Nagar",
     image: "https://images.unsplash.com/photo-1485965120184-e220f721d03e?auto=format&fit=crop&w=900&q=80",
     description: "Lightweight alloy frame with recently serviced drivetrain.",
-    seller: { name: "Riya Khanna", rating: 4.6, avatar: "https://i.pravatar.cc/100?img=48" },
+    seller: { name: "Riya Khanna", rating: 4.6, avatar: "" },
   },
   {
     id: "5",
@@ -83,7 +83,7 @@ export const items: MarketplaceItem[] = [
     location: "BTM",
     image: "https://images.unsplash.com/photo-1542291026-7eec264c27ff?auto=format&fit=crop&w=900&q=80",
     description: "Size 9, lightly used, original box available.",
-    seller: { name: "Kabir Mehta", rating: 4.5, avatar: "https://i.pravatar.cc/100?img=68" },
+    seller: { name: "Kabir Mehta", rating: 4.5, avatar: "" },
   },
   {
     id: "6",
@@ -95,7 +95,7 @@ export const items: MarketplaceItem[] = [
     location: "Whitefield",
     image: "https://images.unsplash.com/photo-1485955900006-10f4d324d411?auto=format&fit=crop&w=900&q=80",
     description: "Healthy 4-foot plant in ceramic pot, pickup only.",
-    seller: { name: "Sara Ali", rating: 4.8, avatar: "https://i.pravatar.cc/100?img=21" },
+    seller: { name: "Sara Ali", rating: 4.8, avatar: "" },
   },
 ];
 

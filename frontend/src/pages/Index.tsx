@@ -1,6 +1,6 @@
 import { ArrowRight, Sparkles } from "lucide-react";
 import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { MarketNavbar } from "@/components/localloop/MarketNavbar";
 import { PageShell } from "@/components/localloop/PageShell";
 import { ProductCard } from "@/components/localloop/ProductCard";
@@ -13,6 +13,7 @@ import { listProducts } from "@/lib/api";
 import { toMarketplaceItem } from "@/lib/marketplace";
 
 const Index = () => {
+  const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [items, setItems] = useState<MarketplaceItem[]>([]);
 
@@ -71,10 +72,18 @@ const Index = () => {
 
             <div className="grid grid-cols-2 gap-3">
               {categories.slice(0, 4).map((category) => (
-                <Card key={category.name} className="card-hover rounded-2xl border-border/70 bg-card/80 p-4 text-center">
-                  <p className="text-2xl">{category.icon}</p>
-                  <p className="mt-2 text-sm font-medium">{category.name}</p>
-                </Card>
+                <button
+                  key={category.name}
+                  type="button"
+                  onClick={() => navigate(`/listings?category=${encodeURIComponent(category.name)}`)}
+                  className="block w-full text-left"
+                  aria-label={`Open ${category.name} listings`}
+                >
+                  <Card className="card-hover cursor-pointer rounded-2xl border-border/70 bg-card/80 p-4 text-center transition-smooth hover:border-primary/40">
+                    <p className="text-2xl">{category.icon}</p>
+                    <p className="mt-2 text-sm font-medium">{category.name}</p>
+                  </Card>
+                </button>
               ))}
             </div>
           </div>

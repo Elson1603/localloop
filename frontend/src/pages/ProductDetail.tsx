@@ -1,16 +1,17 @@
-import { MapPin, MessageCircle, Repeat2, Star } from "lucide-react";
+import { MapPin, MessageCircle, Pencil, Repeat2 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import { MarketNavbar } from "@/components/localloop/MarketNavbar";
 import { PageShell } from "@/components/localloop/PageShell";
 import { ProductCard } from "@/components/localloop/ProductCard";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import type { MarketplaceItem } from "@/data/mockData";
 import { useToast } from "@/hooks/use-toast";
-import { createOffer, getProduct, listProducts } from "@/lib/api";
+import { createOffer, getProduct, getUserProfile, listProducts, type Product } from "@/lib/api";
+import { distanceInKm, getLocationCoordinates, getSavedUserCoordinates } from "@/lib/location";
 import { toMarketplaceItem } from "@/lib/marketplace";
+import { resolveDisplayName, resolveUsernameHandle } from "@/lib/userIdentity";
 
 const decodeTokenSub = (): string => {
   const token = localStorage.getItem("localloop_id_token");
@@ -37,8 +38,10 @@ const ProductDetail = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const [items, setItems] = useState<MarketplaceItem[]>([]);
+  const [rawProduct, setRawProduct] = useState<Product | null>(null);
   const [product, setProduct] = useState<MarketplaceItem | null>(null);
   const [sellerUserId, setSellerUserId] = useState("");
+  const [sellerUsername, setSellerUsername] = useState("");
   const [selectedImage, setSelectedImage] = useState("");
   const isAuthenticated = Boolean(localStorage.getItem("localloop_access_token"));
   const myUserId = decodeTokenSub();
@@ -54,10 +57,37 @@ const ProductDetail = () => {
         if (!mounted) {
           return;
         }
+
+        let resolvedSellerName = "Seller";
+        let resolvedSellerUsername = "";
+        try {
+          const sellerProfile = await getUserProfile(productData.owner_id || "");
+          resolvedSellerName = resolveDisplayName({
+            displayName: sellerProfile.display_name,
+            username: sellerProfile.username,
+            fallback: "Seller",
+          });
+          resolvedSellerUsername = resolveUsernameHandle(sellerProfile.username);
+        } catch {
+          // Keep product page usable even when public profile lookup fails.
+        }
+
+        if (!mounted) {
+          return;
+        }
+
         const mappedProduct = toMarketplaceItem(productData);
-        setProduct(mappedProduct);
+        setRawProduct(productData);
+        setProduct({
+          ...mappedProduct,
+          seller: {
+            ...mappedProduct.seller,
+            name: resolvedSellerName,
+          },
+        });
         setSellerUserId(productData.owner_id || "");
-        setSelectedImage(mappedProduct.image);
+        setSellerUsername(resolvedSellerUsername);
+        setSelectedImage(productData.image_urls[0] || mappedProduct.image);
         setItems(allProducts.map(toMarketplaceItem));
       } catch (error: unknown) {
         if (!mounted) {
@@ -78,19 +108,54 @@ const ProductDetail = () => {
   }, [id, toast]);
 
   const gallery = useMemo(() => {
-    if (!product) {
+    if (!rawProduct && !product) {
       return [] as string[];
     }
-    return [product.image, ...items.filter((item) => item.id !== product.id).slice(0, 3).map((item) => item.image)];
-  }, [items, product]);
+    const uploadedImages = (rawProduct?.image_urls || []).filter(Boolean);
+    if (uploadedImages.length > 0) {
+      return uploadedImages;
+    }
+    return product?.image ? [product.image] : [];
+  }, [product, rawProduct]);
+
+  useEffect(() => {
+    if (!gallery.length) {
+      return;
+    }
+    if (!selectedImage || !gallery.includes(selectedImage)) {
+      setSelectedImage(gallery[0]);
+    }
+  }, [gallery, selectedImage]);
 
   const mapEmbedUrl = useMemo(() => {
-    if (!product?.location) {
+    if (!rawProduct?.location) {
       return "";
     }
-    const query = encodeURIComponent(`${product.location}, India`);
+    if (typeof rawProduct.latitude === "number" && typeof rawProduct.longitude === "number") {
+      const coordsQuery = encodeURIComponent(`${rawProduct.latitude},${rawProduct.longitude}`);
+      return `https://maps.google.com/maps?q=${coordsQuery}&z=14&output=embed`;
+    }
+    const query = encodeURIComponent(`${rawProduct.location}, India`);
     return `https://maps.google.com/maps?q=${query}&z=14&output=embed`;
-  }, [product?.location]);
+  }, [rawProduct?.latitude, rawProduct?.longitude, rawProduct?.location]);
+
+  const detailDistanceKm = useMemo(() => {
+    if (!rawProduct) {
+      return null;
+    }
+
+    const userCoords = getSavedUserCoordinates();
+    if (!userCoords) {
+      return null;
+    }
+
+    const productCoords =
+      typeof rawProduct.latitude === "number" && typeof rawProduct.longitude === "number"
+        ? { latitude: rawProduct.latitude, longitude: rawProduct.longitude }
+        : getLocationCoordinates(rawProduct.location);
+
+    return Number(distanceInKm(userCoords, productCoords).toFixed(1));
+  }, [rawProduct?.latitude, rawProduct?.longitude, rawProduct?.location]);
 
   const handleMakeOffer = async () => {
     if (!isAuthenticated) {
@@ -142,6 +207,7 @@ const ProductDetail = () => {
   const chatPath = isAuthenticated
     ? `/chat?productId=${encodeURIComponent(product.id)}&sellerId=${encodeURIComponent(sellerUserId)}&buyerId=${encodeURIComponent(myUserId)}&sellerName=${encodeURIComponent(product.seller.name)}`
     : `/auth?returnTo=${encodeURIComponent(`${location.pathname}${location.search}`)}`;
+  const isOwner = Boolean(isAuthenticated && myUserId && sellerUserId && myUserId === sellerUserId);
 
   return (
     <div className="min-h-screen">
@@ -165,23 +231,16 @@ const ProductDetail = () => {
             <p className="text-muted-foreground">{product.description}</p>
 
             <Card className="rounded-2xl border-border/70 p-4">
-              <div className="flex items-center gap-3">
-                <Avatar>
-                  <AvatarImage src={product.seller.avatar} alt={product.seller.name} />
-                  <AvatarFallback>{product.seller.name.slice(0, 2)}</AvatarFallback>
-                </Avatar>
-                <div>
-                  <p className="font-medium">{product.seller.name}</p>
-                  <p className="inline-flex items-center gap-1 text-sm text-muted-foreground">
-                    <Star className="h-3.5 w-3.5" /> {product.seller.rating}/5 seller rating
-                  </p>
-                </div>
+              <div>
+                <p className="font-medium">{product.seller.name}</p>
+                <p className="text-sm text-muted-foreground">{sellerUsername ? `@${sellerUsername}` : "Seller profile"}</p>
               </div>
             </Card>
 
             <Card className="glass rounded-2xl p-4">
               <p className="mb-2 inline-flex items-center gap-1 text-sm text-muted-foreground">
-                <MapPin className="h-4 w-4" /> {product.location} · {product.distanceKm} km away
+                <MapPin className="h-4 w-4" /> {product.location}
+                {typeof detailDistanceKm === "number" ? ` · ${detailDistanceKm} km away` : ""}
               </p>
               {mapEmbedUrl ? (
                 <div className="overflow-hidden rounded-xl border border-border/70 bg-muted/40">
@@ -200,14 +259,24 @@ const ProductDetail = () => {
             </Card>
 
             <div className="flex flex-wrap gap-3">
-              <Button asChild className="rounded-full bg-primary text-primary-foreground hover:bg-primary/90">
-                <Link to={chatPath}>
-                  <MessageCircle className="mr-2 h-4 w-4" /> Chat with Seller
-                </Link>
-              </Button>
-              <Button variant="secondary" className="rounded-full" onClick={handleMakeOffer}>
-                <Repeat2 className="mr-2 h-4 w-4" /> Make Offer
-              </Button>
+              {isOwner ? (
+                <Button asChild variant="secondary" className="rounded-full">
+                  <Link to={`/post?productId=${encodeURIComponent(product.id)}`}>
+                    <Pencil className="mr-2 h-4 w-4" /> Edit Listing
+                  </Link>
+                </Button>
+              ) : (
+                <>
+                  <Button asChild className="rounded-full bg-primary text-primary-foreground hover:bg-primary/90">
+                    <Link to={chatPath}>
+                      <MessageCircle className="mr-2 h-4 w-4" /> Chat with Seller
+                    </Link>
+                  </Button>
+                  <Button variant="secondary" className="rounded-full" onClick={handleMakeOffer}>
+                    <Repeat2 className="mr-2 h-4 w-4" /> Make Offer
+                  </Button>
+                </>
+              )}
             </div>
           </section>
         </div>

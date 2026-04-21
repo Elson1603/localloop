@@ -15,17 +15,35 @@ import { listProducts } from "@/lib/api";
 import { distanceInKm, getLocationCoordinates, getSavedUserCoordinates, type Coordinates } from "@/lib/location";
 import { toMarketplaceItem } from "@/lib/marketplace";
 
+const DEFAULT_DISTANCE_KM = 10;
+
+const normalizeCategory = (value: string): string => value.trim().toLowerCase();
+
+const getCategoryFromSearch = (search: string): string => {
+  const requestedCategory = new URLSearchParams(search).get("category");
+  if (!requestedCategory) {
+    return "all";
+  }
+  return requestedCategory.trim();
+};
+
 const Listings = () => {
   const location = useLocation();
   const [maxPrice, setMaxPrice] = useState(45000);
-  const [distance, setDistance] = useState([10]);
-  const [category, setCategory] = useState("all");
+  const [distance, setDistance] = useState([DEFAULT_DISTANCE_KM]);
+  const [distanceFilterActive, setDistanceFilterActive] = useState(false);
+  const [category, setCategory] = useState(() => getCategoryFromSearch(location.search));
   const [barterOnly, setBarterOnly] = useState(false);
   const [items, setItems] = useState<MarketplaceItem[]>([]);
+  const [availableCategories, setAvailableCategories] = useState<string[]>(() => categories.map((cat) => cat.name));
   const [userCoords, setUserCoords] = useState<Coordinates | null>(null);
 
   useEffect(() => {
     setUserCoords(getSavedUserCoordinates());
+  }, [location.search]);
+
+  useEffect(() => {
+    setCategory(getCategoryFromSearch(location.search));
   }, [location.search]);
 
   const nearbyRequested = useMemo(() => new URLSearchParams(location.search).get("nearby") === "1", [location.search]);
@@ -33,6 +51,10 @@ const Listings = () => {
   useEffect(() => {
     if (nearbyRequested) {
       setDistance([8]);
+      setDistanceFilterActive(true);
+    } else {
+      setDistance([DEFAULT_DISTANCE_KM]);
+      setDistanceFilterActive(false);
     }
   }, [nearbyRequested]);
 
@@ -44,14 +66,29 @@ const Listings = () => {
         if (!mounted) {
           return;
         }
+
+        const dynamicCategories = Array.from(
+          new Set(
+            products
+              .map((product) => product.category?.trim())
+              .filter((value): value is string => Boolean(value)),
+          ),
+        );
+        const mergedCategories = Array.from(new Set([...categories.map((cat) => cat.name), ...dynamicCategories]));
+        setAvailableCategories(mergedCategories);
+
         const mapped = products.map(toMarketplaceItem);
         if (!userCoords) {
           setItems(mapped);
           return;
         }
 
-        const withDistances = mapped.map((item) => {
-          const itemCoords = getLocationCoordinates(item.location);
+        const withDistances = mapped.map((item, index) => {
+          const source = products[index];
+          const itemCoords =
+            typeof source?.latitude === "number" && typeof source?.longitude === "number"
+              ? { latitude: source.latitude, longitude: source.longitude }
+              : getLocationCoordinates(item.location);
           const computedDistance = distanceInKm(userCoords, itemCoords);
           return {
             ...item,
@@ -76,13 +113,13 @@ const Listings = () => {
   const filtered = useMemo(
     () =>
       items.filter((item) => {
-        const byCategory = category === "all" || item.category === category;
+        const byCategory = category === "all" || normalizeCategory(item.category) === normalizeCategory(category);
         const byPrice = (item.price ?? maxPrice) <= maxPrice;
-        const byDistance = item.distanceKm <= distance[0];
+        const byDistance = !distanceFilterActive || item.distanceKm <= distance[0];
         const byBarter = barterOnly ? item.barterAvailable : true;
         return byCategory && byPrice && byDistance && byBarter;
       }).sort((first, second) => first.distanceKm - second.distanceKm),
-    [category, maxPrice, distance, barterOnly],
+    [category, maxPrice, distance, distanceFilterActive, barterOnly, items],
   );
 
   return (
@@ -105,9 +142,9 @@ const Listings = () => {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All</SelectItem>
-                  {categories.map((cat) => (
-                    <SelectItem key={cat.name} value={cat.name}>
-                      {cat.name}
+                  {availableCategories.map((categoryName) => (
+                    <SelectItem key={categoryName} value={categoryName}>
+                      {categoryName}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -115,7 +152,16 @@ const Listings = () => {
             </div>
             <div className="space-y-3">
               <Label>Distance ({distance[0]} km)</Label>
-              <Slider value={distance} onValueChange={setDistance} max={15} min={1} step={1} />
+              <Slider
+                value={distance}
+                onValueChange={(nextValue) => {
+                  setDistance(nextValue);
+                  setDistanceFilterActive(true);
+                }}
+                max={20}
+                min={1}
+                step={1}
+              />
             </div>
             <div className="flex items-center justify-between rounded-xl border border-border/70 bg-card px-3 py-2">
               <Label htmlFor="barter">Buy / Barter</Label>
@@ -125,7 +171,7 @@ const Listings = () => {
         </section>
 
         <div className="mt-4 flex items-center justify-between">
-          <p className="text-sm text-muted-foreground">{filtered.length} results near you</p>
+          <p className="text-sm text-muted-foreground">{filtered.length} {distanceFilterActive ? "results near you" : "results"}</p>
           <Badge className="bg-accent/20 text-accent-foreground">{userCoords ? "Nearby mode on" : "Hyperlocal"}</Badge>
         </div>
 

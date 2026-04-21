@@ -3,11 +3,12 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { MarketNavbar } from "@/components/localloop/MarketNavbar";
 import { PageShell } from "@/components/localloop/PageShell";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
-import { type ChatMessage, createChatMessage, listChatMessages } from "@/lib/api";
+import { type ChatMessage, createChatMessage, getUserProfile, listChatMessages } from "@/lib/api";
+import { resolveDisplayName } from "@/lib/userIdentity";
 
 type UiMessage = {
   id: string;
@@ -56,6 +57,8 @@ const makeDirectChatId = (productId: string, userA: string, userB: string): stri
 
 const formatTime = (isoDate: string): string => new Date(isoDate).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 
+const formatFallbackUserTitle = (): string => "Marketplace user";
+
 const toUiMessage = (msg: ChatMessage, myUserId: string): UiMessage => ({
   id: msg.message_id,
   fromMe: msg.sender_user_id === myUserId,
@@ -69,7 +72,10 @@ const Chat = () => {
   const productId = searchParams.get("productId") || "";
   const sellerId = searchParams.get("sellerId") || "";
   const buyerId = searchParams.get("buyerId") || "";
-  const sellerName = searchParams.get("sellerName") || "Seller";
+  const sellerName = resolveDisplayName({
+    displayName: searchParams.get("sellerName") || "",
+    fallback: "Seller",
+  });
   const [message, setMessage] = useState("");
   const [messages, setMessages] = useState<UiMessage[]>([]);
   const [conversations, setConversations] = useState<Conversation[]>([]);
@@ -77,6 +83,7 @@ const Chat = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [isSending, setIsSending] = useState(false);
   const [lastError, setLastError] = useState("");
+  const [userNames, setUserNames] = useState<Record<string, string>>({});
   const endOfMessagesRef = useRef<HTMLDivElement | null>(null);
 
   const myUserId = useMemo(() => {
@@ -147,11 +154,12 @@ const Chat = () => {
         const latest = sorted[sorted.length - 1];
         const sample = sorted.find((m) => m.sender_user_id !== myUserId || m.recipient_user_id !== myUserId) || latest;
         const counterpart = sample.sender_user_id === myUserId ? sample.recipient_user_id : sample.sender_user_id;
+        const knownName = userNames[counterpart];
 
         return {
           chatId,
           counterpartUserId: counterpart,
-          title: counterpart ? `User ${counterpart.slice(0, 8)}` : "Unknown user",
+          title: knownName || formatFallbackUserTitle(),
           subtitle: latest.message,
           updatedAt: latest.created_at,
         };
@@ -183,6 +191,46 @@ const Chat = () => {
       }
 
       nextConversations.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+
+      const unresolvedUserIds = Array.from(
+        new Set(
+          nextConversations
+            .map((conversation) => conversation.counterpartUserId)
+            .filter((userId) => Boolean(userId) && !userNames[userId]),
+        ),
+      );
+
+      if (unresolvedUserIds.length > 0) {
+        const fetchedProfiles = await Promise.all(
+          unresolvedUserIds.map(async (userId) => {
+            try {
+              const profile = await getUserProfile(userId);
+              return {
+                userId,
+                name: resolveDisplayName({
+                  displayName: profile.display_name,
+                  username: profile.username,
+                  fallback: formatFallbackUserTitle(),
+                }),
+              };
+            } catch {
+              return { userId, name: formatFallbackUserTitle() };
+            }
+          }),
+        );
+
+        const nameUpdates = fetchedProfiles.reduce<Record<string, string>>((acc, profile) => {
+          acc[profile.userId] = profile.name;
+          return acc;
+        }, {});
+
+        setUserNames((prev) => ({ ...prev, ...nameUpdates }));
+        nextConversations = nextConversations.map((conversation) => ({
+          ...conversation,
+          title: nameUpdates[conversation.counterpartUserId] || conversation.title,
+        }));
+      }
+
       setConversations(nextConversations);
 
       const hasSelection = nextConversations.some((conversation) => conversation.chatId === selectedChatId);
@@ -198,7 +246,17 @@ const Chat = () => {
     } finally {
       setIsLoading(false);
     }
-  }, [counterpartUserId, deepLinkedChatId, myUserId, selectedChatId, sellerName]);
+  }, [counterpartUserId, deepLinkedChatId, myUserId, selectedChatId, sellerName, userNames]);
+
+  useEffect(() => {
+    if (!counterpartUserId || !sellerName) {
+      return;
+    }
+    setUserNames((prev) => ({
+      ...prev,
+      [counterpartUserId]: prev[counterpartUserId] || sellerName,
+    }));
+  }, [counterpartUserId, sellerName]);
 
   const refreshMessages = useCallback(async () => {
     if (!selectedChatId) {
@@ -313,7 +371,6 @@ const Chat = () => {
             <div className="border-b border-border/70 p-4">
               <div className="flex items-center gap-3">
                 <Avatar>
-                  <AvatarImage src="https://i.pravatar.cc/100?img=12" alt={selectedConversation?.title || "Chat"} />
                   <AvatarFallback>{(selectedConversation?.title || "CH").slice(0, 2).toUpperCase()}</AvatarFallback>
                 </Avatar>
                 <div>

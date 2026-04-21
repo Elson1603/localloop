@@ -6,6 +6,7 @@ import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
+import { isPlaceholderDisplayName } from "@/lib/userIdentity";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8000";
 
@@ -13,6 +14,11 @@ type AuthMode = "login" | "signup";
 
 type ApiErrorShape = {
   detail?: string;
+};
+
+type TokenPayload = {
+  name?: string;
+  email?: string;
 };
 
 type LoginResponse = {
@@ -41,6 +47,20 @@ const parseApiError = async (response: Response): Promise<string> => {
   }
 
   return response.statusText || "Request failed";
+};
+
+const parseTokenPayload = (token: string): TokenPayload | null => {
+  try {
+    const payload = token.split(".")[1];
+    if (!payload) {
+      return null;
+    }
+    const normalized = payload.replace(/-/g, "+").replace(/_/g, "/");
+    const decoded = atob(normalized);
+    return JSON.parse(decoded) as TokenPayload;
+  } catch {
+    return null;
+  }
 };
 
 const Auth = () => {
@@ -186,6 +206,43 @@ const Auth = () => {
       localStorage.setItem("localloop_id_token", tokens.id_token);
       if (tokens.refresh_token) {
         localStorage.setItem("localloop_refresh_token", tokens.refresh_token);
+      }
+
+      const idPayload = parseTokenPayload(tokens.id_token);
+      const signupName = typeof idPayload?.name === "string" ? idPayload.name.trim() : "";
+      const signupEmail = typeof idPayload?.email === "string" ? idPayload.email.trim() : "";
+
+      if (signupName.length >= 2) {
+        try {
+          const profileToken = tokens.id_token || tokens.access_token;
+          const profileResponse = await fetch(`${API_BASE_URL}/api/v1/users/me`, {
+            headers: {
+              Authorization: `Bearer ${profileToken}`,
+            },
+          });
+
+          if (profileResponse.ok) {
+            const profile = (await profileResponse.json()) as { display_name?: string; email?: string };
+            const shouldSyncName = isPlaceholderDisplayName(profile.display_name, profile.email || signupEmail);
+
+            if (shouldSyncName) {
+              await fetch(`${API_BASE_URL}/api/v1/users/me`, {
+                method: "PUT",
+                headers: {
+                  "Content-Type": "application/json",
+                  Authorization: `Bearer ${profileToken}`,
+                },
+                body: JSON.stringify({
+                  display_name: signupName,
+                  phone: null,
+                  location: null,
+                }),
+              });
+            }
+          }
+        } catch {
+          // Keep login successful even if profile sync fails.
+        }
       }
 
       const meResponse = await fetch(`${API_BASE_URL}/api/v1/auth/me`, {

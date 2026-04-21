@@ -45,6 +45,16 @@ def list_offers(
     if buyer_user_id and buyer_user_id != current_user_id:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You can only view your own offers")
 
+    if product_id:
+        products_table = get_table(settings.products_table_name)
+        product = products_table.get_item(Key={"product_id": product_id}).get("Item")
+        if not product:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Product not found")
+
+        product_owner_id = str(product.get("owner_id", ""))
+        if product_owner_id != current_user_id and buyer_user_id != current_user_id:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You are not allowed to view offers for this product")
+
     table = get_table(settings.offers_table_name)
     effective_buyer_user_id = buyer_user_id or (None if product_id else current_user_id)
     response = scan_with_optional_filter(table, {"product_id": product_id, "buyer_user_id": effective_buyer_user_id})

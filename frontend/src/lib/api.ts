@@ -8,6 +8,9 @@ export type Product = {
   category: string;
   price: number;
   location: string;
+  latitude?: number | null;
+  longitude?: number | null;
+  image_refs?: string[];
   image_urls: string[];
   status: string;
   created_at: string;
@@ -45,6 +48,12 @@ export type UserProfile = {
   updated_at: string;
 };
 
+export type PublicUserProfile = {
+  user_id: string;
+  username: string;
+  display_name: string;
+};
+
 type PresignUploadResponse = {
   upload_url: string;
   object_key: string;
@@ -53,9 +62,19 @@ type PresignUploadResponse = {
 
 const getAuthToken = (): string | null => localStorage.getItem("localloop_access_token");
 
+const getIdToken = (): string | null => localStorage.getItem("localloop_id_token");
+
 const authHeaders = (): HeadersInit => {
   const token = getAuthToken();
   return token ? { Authorization: `Bearer ${token}` } : {};
+};
+
+const userProfileHeaders = (): HeadersInit => {
+  const idToken = getIdToken();
+  if (idToken) {
+    return { Authorization: `Bearer ${idToken}` };
+  }
+  return authHeaders();
 };
 
 const parseError = async (response: Response): Promise<string> => {
@@ -108,10 +127,39 @@ export const createProduct = async (payload: {
   category: string;
   price: number;
   location: string;
+  latitude: number;
+  longitude: number;
   image_urls: string[];
 }): Promise<Product> => {
   const response = await fetch(`${API_BASE_URL}/api/v1/products`, {
     method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...authHeaders(),
+    },
+    body: JSON.stringify(payload),
+  });
+  if (!response.ok) {
+    throw new Error(await parseError(response));
+  }
+  return (await response.json()) as Product;
+};
+
+export const updateProduct = async (
+  productId: string,
+  payload: {
+    title: string;
+    description: string;
+    category: string;
+    price: number;
+    location: string;
+    latitude: number;
+    longitude: number;
+    image_urls: string[];
+  },
+): Promise<Product> => {
+  const response = await fetch(`${API_BASE_URL}/api/v1/products/${encodeURIComponent(productId)}`, {
+    method: "PUT",
     headers: {
       "Content-Type": "application/json",
       ...authHeaders(),
@@ -260,7 +308,11 @@ export const listOffers = async (params?: {
   }
 
   const suffix = query.size ? `?${query.toString()}` : "";
-  const response = await fetch(`${API_BASE_URL}/api/v1/offers${suffix}`);
+  const response = await fetch(`${API_BASE_URL}/api/v1/offers${suffix}`, {
+    headers: {
+      ...authHeaders(),
+    },
+  });
   if (!response.ok) {
     throw new Error(await parseError(response));
   }
@@ -270,11 +322,23 @@ export const listOffers = async (params?: {
 export const getMyProfile = async (): Promise<UserProfile> => {
   const response = await fetch(`${API_BASE_URL}/api/v1/users/me`, {
     headers: {
-      ...authHeaders(),
+      ...userProfileHeaders(),
     },
   });
   if (!response.ok) {
     throw new Error(await parseError(response));
   }
   return (await response.json()) as UserProfile;
+};
+
+export const getUserProfile = async (userId: string): Promise<PublicUserProfile> => {
+  const response = await fetch(`${API_BASE_URL}/api/v1/users/${encodeURIComponent(userId)}`, {
+    headers: {
+      ...userProfileHeaders(),
+    },
+  });
+  if (!response.ok) {
+    throw new Error(await parseError(response));
+  }
+  return (await response.json()) as PublicUserProfile;
 };
