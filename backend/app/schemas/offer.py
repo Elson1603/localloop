@@ -1,3 +1,5 @@
+from typing import Literal
+
 from pydantic import BaseModel, Field
 
 
@@ -5,6 +7,10 @@ class CreateOfferRequest(BaseModel):
     product_id: str = Field(min_length=3, max_length=80)
     offered_price: float = Field(gt=0)
     note: str | None = Field(default=None, max_length=500)
+
+
+class UpdateOfferStatusRequest(BaseModel):
+    status: Literal["accepted", "rejected"]
 
 
 class OfferResponse(BaseModel):

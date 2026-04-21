@@ -18,7 +18,17 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import type { MarketplaceItem } from "@/data/mockData";
 import { useToast } from "@/hooks/use-toast";
-import { createOffer, getProduct, getUserProfile, listProducts, type Product } from "@/lib/api";
+import {
+  createOffer,
+  getProduct,
+  getUserProfile,
+  listOffers,
+  listProducts,
+  updateOfferStatus,
+  type Offer,
+  type OfferStatus,
+  type Product,
+} from "@/lib/api";
 import { distanceInKm, getLocationCoordinates, getSavedUserCoordinates } from "@/lib/location";
 import { toMarketplaceItem } from "@/lib/marketplace";
 import { resolveDisplayName, resolveUsernameHandle } from "@/lib/userIdentity";
@@ -56,6 +66,9 @@ const ProductDetail = () => {
   const [isOfferDialogOpen, setIsOfferDialogOpen] = useState(false);
   const [offerPriceInput, setOfferPriceInput] = useState("");
   const [isSubmittingOffer, setIsSubmittingOffer] = useState(false);
+  const [incomingOffers, setIncomingOffers] = useState<Offer[]>([]);
+  const [isLoadingOffers, setIsLoadingOffers] = useState(false);
+  const [updatingOfferId, setUpdatingOfferId] = useState<string | null>(null);
   const isAuthenticated = Boolean(localStorage.getItem("localloop_access_token"));
   const myUserId = decodeTokenSub();
 
@@ -170,6 +183,49 @@ const ProductDetail = () => {
     return Number(distanceInKm(userCoords, productCoords).toFixed(1));
   }, [rawProduct?.latitude, rawProduct?.longitude, rawProduct?.location]);
 
+  const isOwner = Boolean(isAuthenticated && myUserId && sellerUserId && myUserId === sellerUserId);
+
+  useEffect(() => {
+    let mounted = true;
+
+    const loadIncomingOffers = async () => {
+      if (!isOwner || !product?.id) {
+        setIncomingOffers([]);
+        return;
+      }
+
+      try {
+        setIsLoadingOffers(true);
+        const offers = await listOffers({ productId: product.id });
+        if (!mounted) {
+          return;
+        }
+
+        const sortedOffers = [...offers].sort((a, b) => b.created_at.localeCompare(a.created_at));
+        setIncomingOffers(sortedOffers);
+      } catch (error: unknown) {
+        if (!mounted) {
+          return;
+        }
+        setIncomingOffers([]);
+        toast({
+          title: "Unable to load incoming offers",
+          description: error instanceof Error ? error.message : "Please try again shortly.",
+          variant: "destructive",
+        });
+      } finally {
+        if (mounted) {
+          setIsLoadingOffers(false);
+        }
+      }
+    };
+
+    void loadIncomingOffers();
+    return () => {
+      mounted = false;
+    };
+  }, [isOwner, product?.id, toast]);
+
   const handleOpenOfferDialog = () => {
     if (!isAuthenticated) {
       toast({
@@ -228,6 +284,26 @@ const ProductDetail = () => {
     }
   };
 
+  const handleOfferStatusUpdate = async (offerId: string, nextStatus: OfferStatus) => {
+    try {
+      setUpdatingOfferId(offerId);
+      const updatedOffer = await updateOfferStatus({ offerId, status: nextStatus });
+      setIncomingOffers((prev) => prev.map((offer) => (offer.offer_id === offerId ? updatedOffer : offer)));
+      toast({
+        title: `Offer ${nextStatus}`,
+        description: `The offer was marked as ${nextStatus}.`,
+      });
+    } catch (error: unknown) {
+      toast({
+        title: "Unable to update offer",
+        description: error instanceof Error ? error.message : "Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setUpdatingOfferId(null);
+    }
+  };
+
   if (!product) {
     return (
       <div className="min-h-screen">
@@ -244,7 +320,6 @@ const ProductDetail = () => {
   const chatPath = isAuthenticated
     ? `/chat?productId=${encodeURIComponent(product.id)}&sellerId=${encodeURIComponent(sellerUserId)}&buyerId=${encodeURIComponent(myUserId)}&sellerName=${encodeURIComponent(product.seller.name)}`
     : `/auth?returnTo=${encodeURIComponent(`${location.pathname}${location.search}`)}`;
-  const isOwner = Boolean(isAuthenticated && myUserId && sellerUserId && myUserId === sellerUserId);
 
   return (
     <div className="min-h-screen">
@@ -348,6 +423,48 @@ const ProductDetail = () => {
                 </DialogFooter>
               </DialogContent>
             </Dialog>
+
+            {isOwner && (
+              <Card className="rounded-2xl border-border/70 p-4">
+                <h3 className="text-base font-semibold">Incoming Offers</h3>
+                {isLoadingOffers ? (
+                  <p className="mt-2 text-sm text-muted-foreground">Loading offers...</p>
+                ) : incomingOffers.length === 0 ? (
+                  <p className="mt-2 text-sm text-muted-foreground">No offers received yet for this product.</p>
+                ) : (
+                  <div className="mt-3 space-y-3">
+                    {incomingOffers.map((offer) => (
+                      <div key={offer.offer_id} className="rounded-xl border border-border/70 bg-secondary/20 p-3">
+                        <p className="text-sm font-medium">Offer: ₹{offer.offered_price.toLocaleString()}</p>
+                        <p className="text-xs text-muted-foreground">Buyer: {offer.buyer_user_id}</p>
+                        {offer.note ? <p className="mt-1 text-sm text-muted-foreground">{offer.note}</p> : null}
+                        <p className="mt-1 text-xs capitalize text-muted-foreground">Status: {offer.status}</p>
+                        <p className="mt-1 text-xs text-muted-foreground">Received: {new Date(offer.created_at).toLocaleString()}</p>
+                        {offer.status === "pending" ? (
+                          <div className="mt-3 flex flex-wrap gap-2">
+                            <Button
+                              size="sm"
+                              onClick={() => void handleOfferStatusUpdate(offer.offer_id, "accepted")}
+                              disabled={updatingOfferId === offer.offer_id}
+                            >
+                              Accept
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="destructive"
+                              onClick={() => void handleOfferStatusUpdate(offer.offer_id, "rejected")}
+                              disabled={updatingOfferId === offer.offer_id}
+                            >
+                              Reject
+                            </Button>
+                          </div>
+                        ) : null}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </Card>
+            )}
           </section>
         </div>
 

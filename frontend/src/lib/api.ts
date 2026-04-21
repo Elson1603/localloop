@@ -37,6 +37,8 @@ export type Offer = {
   updated_at: string;
 };
 
+export type OfferStatus = "accepted" | "rejected";
+
 export type UserProfile = {
   user_id: string;
   email: string;
@@ -329,6 +331,24 @@ export const listOffers = async (params?: {
     throw new Error(await parseError(response));
   }
   return (await response.json()) as Offer[];
+};
+
+export const updateOfferStatus = async (payload: {
+  offerId: string;
+  status: OfferStatus;
+}): Promise<Offer> => {
+  const response = await fetch(`${API_BASE_URL}/api/v1/offers/${encodeURIComponent(payload.offerId)}/status`, {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json",
+      ...authHeaders(),
+    },
+    body: JSON.stringify({ status: payload.status }),
+  });
+  if (!response.ok) {
+    throw new Error(await parseError(response));
+  }
+  return (await response.json()) as Offer;
 };
 
 export const getMyProfile = async (): Promise<UserProfile> => {

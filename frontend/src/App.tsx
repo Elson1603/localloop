@@ -10,6 +10,7 @@ import Chat from "./pages/Chat";
 import Index from "./pages/Index";
 import Listings from "./pages/Listings";
 import NotFound from "./pages/NotFound";
+import Offers from "./pages/Offers";
 import PostItem from "./pages/PostItem";
 import ProductDetail from "./pages/ProductDetail";
 import Profile from "./pages/Profile";
@@ -46,6 +47,7 @@ const AppRoutes = () => {
           <Route path="/listings" element={<Listings />} />
           <Route path="/listings/:id" element={<ProductDetail />} />
           <Route path="/chat" element={<ProtectedRoute><Chat /></ProtectedRoute>} />
+          <Route path="/offers" element={<ProtectedRoute><Offers /></ProtectedRoute>} />
           <Route path="/post" element={<ProtectedRoute><PostItem /></ProtectedRoute>} />
           <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
           <Route path="/auth" element={<Auth />} />

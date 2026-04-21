@@ -12,6 +12,7 @@ const links = [
   { to: "/", label: "Home" },
   { to: "/listings", label: "Browse" },
   { to: "/chat", label: "Chat" },
+  { to: "/offers", label: "Offers" },
   { to: "/profile", label: "Profile" },
 ];
 
@@ -23,7 +24,7 @@ export const MarketNavbar = () => {
   const { toast } = useToast();
   const navigate = useNavigate();
   const location = useLocation();
-  const protectedPaths = new Set(["/chat", "/profile", "/post"]);
+  const protectedPaths = new Set(["/chat", "/offers", "/profile", "/post"]);
   const shouldShowInlinePost = location.pathname !== "/post" && location.pathname !== "/auth";
 
   useEffect(() => {
