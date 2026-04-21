@@ -6,6 +6,16 @@ import { PageShell } from "@/components/localloop/PageShell";
 import { ProductCard } from "@/components/localloop/ProductCard";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import type { MarketplaceItem } from "@/data/mockData";
 import { useToast } from "@/hooks/use-toast";
 import { createOffer, getProduct, getUserProfile, listProducts, type Product } from "@/lib/api";
@@ -43,6 +53,9 @@ const ProductDetail = () => {
   const [sellerUserId, setSellerUserId] = useState("");
   const [sellerUsername, setSellerUsername] = useState("");
   const [selectedImage, setSelectedImage] = useState("");
+  const [isOfferDialogOpen, setIsOfferDialogOpen] = useState(false);
+  const [offerPriceInput, setOfferPriceInput] = useState("");
+  const [isSubmittingOffer, setIsSubmittingOffer] = useState(false);
   const isAuthenticated = Boolean(localStorage.getItem("localloop_access_token"));
   const myUserId = decodeTokenSub();
 
@@ -157,7 +170,7 @@ const ProductDetail = () => {
     return Number(distanceInKm(userCoords, productCoords).toFixed(1));
   }, [rawProduct?.latitude, rawProduct?.longitude, rawProduct?.location]);
 
-  const handleMakeOffer = async () => {
+  const handleOpenOfferDialog = () => {
     if (!isAuthenticated) {
       toast({
         title: "Login required",
@@ -171,23 +184,47 @@ const ProductDetail = () => {
     if (!product?.price) {
       return;
     }
+
+    const suggestedOffer = Math.max(1, Math.round(product.price * 0.95));
+    setOfferPriceInput(String(suggestedOffer));
+    setIsOfferDialogOpen(true);
+  };
+
+  const handleMakeOffer = async () => {
+    if (!product?.price) {
+      return;
+    }
+
+    const offeredPrice = Number(offerPriceInput);
+    if (!Number.isFinite(offeredPrice) || offeredPrice <= 0) {
+      toast({
+        title: "Invalid price",
+        description: "Please enter a valid offer price above 0.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     try {
-      const offeredPrice = Math.max(1, Math.round(product.price * 0.95));
+      setIsSubmittingOffer(true);
       await createOffer({
         product_id: product.id,
-        offered_price: offeredPrice,
+        offered_price: Math.round(offeredPrice),
         note: "Offer sent from product details page",
       });
       toast({
         title: "Offer submitted",
-        description: `Your offer of Rs ${offeredPrice.toLocaleString()} has been sent.`,
+        description: `Your offer of ₹${Math.round(offeredPrice).toLocaleString()} has been sent.`,
       });
+      setIsOfferDialogOpen(false);
     } catch (error: unknown) {
       toast({
         title: "Offer failed",
         description: error instanceof Error ? error.message : "Please login and try again.",
         variant: "destructive",
       });
+    } finally {
+      setIsSubmittingOffer(false);
     }
   };
 
@@ -272,12 +309,45 @@ const ProductDetail = () => {
                       <MessageCircle className="mr-2 h-4 w-4" /> Chat with Seller
                     </Link>
                   </Button>
-                  <Button variant="secondary" className="rounded-full" onClick={handleMakeOffer}>
+                  <Button variant="secondary" className="rounded-full" onClick={handleOpenOfferDialog}>
                     <Repeat2 className="mr-2 h-4 w-4" /> Make Offer
                   </Button>
                 </>
               )}
             </div>
+
+            <Dialog open={isOfferDialogOpen} onOpenChange={setIsOfferDialogOpen}>
+              <DialogContent className="sm:max-w-md">
+                <DialogHeader>
+                  <DialogTitle>Make an offer</DialogTitle>
+                  <DialogDescription>
+                    Listed price: {product.price ? `₹${product.price.toLocaleString()}` : "Barter Available"}
+                  </DialogDescription>
+                </DialogHeader>
+
+                <div className="space-y-2">
+                  <Label htmlFor="offer-price">Your offer price (₹)</Label>
+                  <Input
+                    id="offer-price"
+                    type="number"
+                    min={1}
+                    step={1}
+                    value={offerPriceInput}
+                    onChange={(event) => setOfferPriceInput(event.target.value)}
+                    placeholder="Enter your offer"
+                  />
+                </div>
+
+                <DialogFooter>
+                  <Button variant="secondary" onClick={() => setIsOfferDialogOpen(false)} disabled={isSubmittingOffer}>
+                    Cancel
+                  </Button>
+                  <Button onClick={handleMakeOffer} disabled={isSubmittingOffer}>
+                    {isSubmittingOffer ? "Sending..." : "Send Offer"}
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
           </section>
         </div>
 

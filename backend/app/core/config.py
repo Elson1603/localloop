@@ -30,6 +30,7 @@ class Settings(BaseSettings):
     products_table_name: str = Field(default="LocalLoopProducts", alias="DYNAMODB_PRODUCTS_TABLE")
     chats_table_name: str = Field(default="LocalLoopChats", alias="DYNAMODB_CHATS_TABLE")
     offers_table_name: str = Field(default="LocalLoopOffers", alias="DYNAMODB_OFFERS_TABLE")
+    notifications_table_name: str = Field(default="LocalLoopNotifications", alias="DYNAMODB_NOTIFICATIONS_TABLE")
     api_prefix: str = Field(default="/api/v1", alias="API_PREFIX")
     project_name: str = Field(default="LocalLoop Backend", alias="PROJECT_NAME")
 

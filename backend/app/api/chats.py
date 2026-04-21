@@ -1,6 +1,8 @@
 from datetime import datetime, timezone
+import logging
 from uuid import uuid4
 
+from botocore.exceptions import ClientError
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
 from app.core.config import get_settings
@@ -10,6 +12,38 @@ from app.schemas.chat import ChatMessageResponse, CreateChatMessageRequest
 
 router = APIRouter(prefix="/chats", tags=["chats"])
 settings = get_settings()
+logger = logging.getLogger(__name__)
+
+
+def _store_notification(notification_item: dict) -> None:
+    notifications_table = get_table(settings.notifications_table_name)
+    notifications_table.put_item(Item=notification_item)
+
+    recipient_user_id = str(notification_item.get("recipient_user_id") or "").strip()
+    notification_id = str(notification_item.get("notification_id") or "").strip()
+    if not recipient_user_id or not notification_id:
+        return
+
+    users_table = get_table(settings.users_table_name)
+    try:
+        users_table.update_item(
+            Key={"user_id": recipient_user_id},
+            UpdateExpression=(
+                "SET notification_ids = list_append(if_not_exists(notification_ids, :empty), :new_ids), "
+                "updated_at = :updated_at"
+            ),
+            ExpressionAttributeValues={
+                ":empty": [],
+                ":new_ids": [notification_id],
+                ":updated_at": datetime.now(timezone.utc).isoformat(),
+            },
+            ConditionExpression="attribute_exists(user_id)",
+        )
+    except ClientError as error:
+        code = str(error.response.get("Error", {}).get("Code", ""))
+        if code == "ConditionalCheckFailedException":
+            return
+        logger.warning("Failed to append notification ID to user index", exc_info=error)
 
 
 @router.post("/messages", response_model=ChatMessageResponse)
@@ -30,6 +64,20 @@ def create_chat_message(
 
     table = get_table(settings.chats_table_name)
     table.put_item(Item=item)
+    
+    if payload.recipient_user_id and payload.recipient_user_id != current_user.get("sub", ""):
+        notification_item = {
+            "notification_id": str(uuid4()),
+            "recipient_user_id": payload.recipient_user_id,
+            "title": "New Message",
+            "message": "You received a new chat message.",
+            "reference_id": payload.chat_id,
+            "reference_type": "chat",
+            "is_read": False,
+            "created_at": now,
+        }
+        _store_notification(notification_item)
+
     return ChatMessageResponse(**serialize_dynamo(item))
 
 

@@ -54,6 +54,18 @@ export type PublicUserProfile = {
   display_name: string;
 };
 
+export type LocalLoopNotification = {
+  notification_id: string;
+  recipient_user_id: string;
+  title: string;
+  message: string;
+  reference_id?: string | null;
+  reference_type?: string | null;
+  is_read: boolean;
+  created_at: string;
+};
+
+
 type PresignUploadResponse = {
   upload_url: string;
   object_key: string;
@@ -341,4 +353,29 @@ export const getUserProfile = async (userId: string): Promise<PublicUserProfile>
     throw new Error(await parseError(response));
   }
   return (await response.json()) as PublicUserProfile;
+};
+
+export const listNotifications = async (): Promise<LocalLoopNotification[]> => {
+  const response = await fetch(`${API_BASE_URL}/api/v1/notifications`, {
+    headers: {
+      ...authHeaders(),
+    },
+  });
+  if (!response.ok) {
+    throw new Error(await parseError(response));
+  }
+  return (await response.json()) as LocalLoopNotification[];
+};
+
+export const markNotificationRead = async (notificationId: string): Promise<LocalLoopNotification> => {
+  const response = await fetch(`${API_BASE_URL}/api/v1/notifications/${encodeURIComponent(notificationId)}/read`, {
+    method: "PUT",
+    headers: {
+      ...authHeaders(),
+    },
+  });
+  if (!response.ok) {
+    throw new Error(await parseError(response));
+  }
+  return (await response.json()) as LocalLoopNotification;
 };

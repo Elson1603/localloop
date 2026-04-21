@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { requestCurrentPosition, saveUserCoordinates } from "@/lib/location";
+import { NotificationsMenu } from "@/components/localloop/NotificationsMenu";
 
 const links = [
   { to: "/", label: "Home" },
@@ -169,9 +170,13 @@ export const MarketNavbar = () => {
         </div>
 
         <div className="flex shrink-0 items-center gap-2">
-          <Button variant="ghost" size="icon" className="rounded-full" aria-label="Notifications">
-            <Bell className="h-4 w-4" />
-          </Button>
+          {isAuthenticated ? (
+            <NotificationsMenu />
+          ) : (
+            <Button variant="ghost" size="icon" className="rounded-full" aria-label="Notifications">
+              <Bell className="h-4 w-4" />
+            </Button>
+          )}
           <Button variant="ghost" size="icon" className="rounded-full" onClick={toggleTheme} aria-label="Toggle dark mode">
             {dark ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
           </Button>

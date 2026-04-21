@@ -115,7 +115,7 @@ Login:
 
 ## 7) DynamoDB setup (Users, Products, Chats, Offers)
 
-Create these 4 DynamoDB tables in the same AWS region as your backend:
+Create these 5 DynamoDB tables in the same AWS region as your backend:
 
 1. `LocalLoopUsers`
    - Partition key: `user_id` (String)
@@ -125,6 +125,8 @@ Create these 4 DynamoDB tables in the same AWS region as your backend:
    - Partition key: `message_id` (String)
 4. `LocalLoopOffers`
    - Partition key: `offer_id` (String)
+5. `LocalLoopNotifications`
+   - Partition key: `notification_id` (String)
 
 Recommended table settings for MVP:
 
@@ -138,7 +140,7 @@ Recommended table settings for MVP:
 2. Enter table name and partition key for each table above.
 3. Keep sort key empty for this phase.
 4. Set table class to `Standard`.
-5. Repeat until all 4 tables are created.
+5. Repeat until all 5 tables are created.
 
 ### Environment variables
 
@@ -148,6 +150,7 @@ Set these values in `.env` (or keep defaults from `.env.example`):
 - `DYNAMODB_PRODUCTS_TABLE`
 - `DYNAMODB_CHATS_TABLE`
 - `DYNAMODB_OFFERS_TABLE`
+- `DYNAMODB_NOTIFICATIONS_TABLE`
 
 ### IAM permissions required
 
@@ -158,7 +161,7 @@ Add these DynamoDB actions to the IAM user/role used by backend:
 - `dynamodb:Scan`
 - `dynamodb:UpdateItem`
 
-Limit resources to the 4 table ARNs for production.
+Limit resources to the 5 table ARNs for production.
 
 ## 8) New DynamoDB-backed endpoints
 

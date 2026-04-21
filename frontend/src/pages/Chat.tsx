@@ -69,6 +69,7 @@ const toUiMessage = (msg: ChatMessage, myUserId: string): UiMessage => ({
 const Chat = () => {
   const { toast } = useToast();
   const [searchParams] = useSearchParams();
+  const requestedChatId = searchParams.get("chatId") || "";
   const productId = searchParams.get("productId") || "";
   const sellerId = searchParams.get("sellerId") || "";
   const buyerId = searchParams.get("buyerId") || "";
@@ -234,7 +235,11 @@ const Chat = () => {
       setConversations(nextConversations);
 
       const hasSelection = nextConversations.some((conversation) => conversation.chatId === selectedChatId);
-      if (!hasSelection) {
+      const requestedExists = Boolean(requestedChatId) && nextConversations.some((conversation) => conversation.chatId === requestedChatId);
+
+      if (requestedExists && selectedChatId !== requestedChatId) {
+        setSelectedChatId(requestedChatId);
+      } else if (!hasSelection) {
         setSelectedChatId(deepLinkedChatId || nextConversations[0]?.chatId || "");
       }
 
@@ -246,7 +251,7 @@ const Chat = () => {
     } finally {
       setIsLoading(false);
     }
-  }, [counterpartUserId, deepLinkedChatId, myUserId, selectedChatId, sellerName, userNames]);
+  }, [counterpartUserId, deepLinkedChatId, myUserId, requestedChatId, selectedChatId, sellerName, userNames]);
 
   useEffect(() => {
     if (!counterpartUserId || !sellerName) {

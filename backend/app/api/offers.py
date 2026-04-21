@@ -1,6 +1,8 @@
 from datetime import datetime, timezone
+import logging
 from uuid import uuid4
 
+from botocore.exceptions import ClientError
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
 from app.core.config import get_settings
@@ -10,6 +12,38 @@ from app.schemas.offer import CreateOfferRequest, OfferResponse
 
 router = APIRouter(prefix="/offers", tags=["offers"])
 settings = get_settings()
+logger = logging.getLogger(__name__)
+
+
+def _store_notification(notification_item: dict) -> None:
+    notifications_table = get_table(settings.notifications_table_name)
+    notifications_table.put_item(Item=notification_item)
+
+    recipient_user_id = str(notification_item.get("recipient_user_id") or "").strip()
+    notification_id = str(notification_item.get("notification_id") or "").strip()
+    if not recipient_user_id or not notification_id:
+        return
+
+    users_table = get_table(settings.users_table_name)
+    try:
+        users_table.update_item(
+            Key={"user_id": recipient_user_id},
+            UpdateExpression=(
+                "SET notification_ids = list_append(if_not_exists(notification_ids, :empty), :new_ids), "
+                "updated_at = :updated_at"
+            ),
+            ExpressionAttributeValues={
+                ":empty": [],
+                ":new_ids": [notification_id],
+                ":updated_at": datetime.now(timezone.utc).isoformat(),
+            },
+            ConditionExpression="attribute_exists(user_id)",
+        )
+    except ClientError as error:
+        code = str(error.response.get("Error", {}).get("Code", ""))
+        if code == "ConditionalCheckFailedException":
+            return
+        logger.warning("Failed to append notification ID to user index", exc_info=error)
 
 
 @router.post("", response_model=OfferResponse, status_code=status.HTTP_201_CREATED)
@@ -32,6 +66,23 @@ def create_offer(
 
     table = get_table(settings.offers_table_name)
     table.put_item(Item=item)
+    
+    # Send notification to product owner
+    products_table = get_table(settings.products_table_name)
+    product = products_table.get_item(Key={"product_id": payload.product_id}).get("Item")
+    if product and product.get("owner_id") and product.get("owner_id") != current_user.get("sub", ""):
+        notification_item = {
+            "notification_id": str(uuid4()),
+            "recipient_user_id": product.get("owner_id"),
+            "title": "New Offer Received",
+            "message": f"You received a new offer of {payload.offered_price} on your product.",
+            "reference_id": payload.product_id,
+            "reference_type": "product",
+            "is_read": False,
+            "created_at": now,
+        }
+        _store_notification(notification_item)
+
     return OfferResponse(**serialize_dynamo(item))
 
 

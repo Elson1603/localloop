@@ -7,6 +7,7 @@ from app.api.offers import router as offers_router
 from app.api.products import router as products_router
 from app.api.storage import router as storage_router
 from app.api.users import router as users_router
+from app.api.notifications import router as notifications_router
 from app.core.config import get_settings
 
 settings = get_settings()
@@ -38,3 +39,4 @@ app.include_router(products_router, prefix=settings.api_prefix)
 app.include_router(chats_router, prefix=settings.api_prefix)
 app.include_router(offers_router, prefix=settings.api_prefix)
 app.include_router(storage_router, prefix=settings.api_prefix)
+app.include_router(notifications_router, prefix=settings.api_prefix)
