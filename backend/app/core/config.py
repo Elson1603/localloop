@@ -31,6 +31,8 @@ class Settings(BaseSettings):
     chats_table_name: str = Field(default="LocalLoopChats", alias="DYNAMODB_CHATS_TABLE")
     offers_table_name: str = Field(default="LocalLoopOffers", alias="DYNAMODB_OFFERS_TABLE")
     notifications_table_name: str = Field(default="LocalLoopNotifications", alias="DYNAMODB_NOTIFICATIONS_TABLE")
+    reviews_table_name: str = Field(default="LocalLoopReviews", alias="DYNAMODB_REVIEWS_TABLE")
+    offer_expiry_hours: int = Field(default=48, alias="OFFER_EXPIRY_HOURS")
     api_prefix: str = Field(default="/api/v1", alias="API_PREFIX")
     project_name: str = Field(default="LocalLoop Backend", alias="PROJECT_NAME")
 

@@ -37,7 +37,13 @@ export type Offer = {
   updated_at: string;
 };
 
-export type OfferStatus = "accepted" | "rejected";
+export type OfferStatus =
+  | "countered"
+  | "accepted"
+  | "scheduled_pickup"
+  | "completed"
+  | "cancelled"
+  | "rejected";
 
 export type UserProfile = {
   user_id: string;
@@ -54,6 +60,20 @@ export type PublicUserProfile = {
   user_id: string;
   username: string;
   display_name: string;
+  response_rate: number;
+  completed_deals: number;
+  average_rating: number;
+  member_since?: string | null;
+};
+
+export type Review = {
+  review_id: string;
+  offer_id: string;
+  reviewer_user_id: string;
+  reviewee_user_id: string;
+  rating: number;
+  comment?: string | null;
+  created_at: string;
 };
 
 export type LocalLoopNotification = {
@@ -336,6 +356,8 @@ export const listOffers = async (params?: {
 export const updateOfferStatus = async (payload: {
   offerId: string;
   status: OfferStatus;
+  counterOfferPrice?: number;
+  note?: string;
 }): Promise<Offer> => {
   const response = await fetch(`${API_BASE_URL}/api/v1/offers/${encodeURIComponent(payload.offerId)}/status`, {
     method: "PUT",
@@ -343,7 +365,11 @@ export const updateOfferStatus = async (payload: {
       "Content-Type": "application/json",
       ...authHeaders(),
     },
-    body: JSON.stringify({ status: payload.status }),
+    body: JSON.stringify({
+      status: payload.status,
+      counter_offer_price: payload.counterOfferPrice,
+      note: payload.note,
+    }),
   });
   if (!response.ok) {
     throw new Error(await parseError(response));
@@ -398,4 +424,36 @@ export const markNotificationRead = async (notificationId: string): Promise<Loca
     throw new Error(await parseError(response));
   }
   return (await response.json()) as LocalLoopNotification;
+};
+
+export const createReview = async (payload: {
+  offer_id: string;
+  rating: number;
+  comment?: string;
+}): Promise<Review> => {
+  const response = await fetch(`${API_BASE_URL}/api/v1/reviews`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...authHeaders(),
+    },
+    body: JSON.stringify(payload),
+  });
+  if (!response.ok) {
+    throw new Error(await parseError(response));
+  }
+  return (await response.json()) as Review;
+};
+
+export const listReviews = async (userId: string): Promise<Review[]> => {
+  const query = new URLSearchParams({ user_id: userId });
+  const response = await fetch(`${API_BASE_URL}/api/v1/reviews?${query.toString()}`, {
+    headers: {
+      ...authHeaders(),
+    },
+  });
+  if (!response.ok) {
+    throw new Error(await parseError(response));
+  }
+  return (await response.json()) as Review[];
 };

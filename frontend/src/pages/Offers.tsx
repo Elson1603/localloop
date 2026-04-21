@@ -16,14 +16,28 @@ import {
   type Product,
 } from "@/lib/api";
 
-type OfferFilter = "all" | "pending" | "accepted" | "rejected";
+type OfferFilter =
+  | "all"
+  | "pending"
+  | "countered"
+  | "accepted"
+  | "scheduled_pickup"
+  | "completed"
+  | "cancelled"
+  | "rejected"
+  | "expired";
 
-const filterOptions: OfferFilter[] = ["all", "pending", "accepted", "rejected"];
+const filterOptions: OfferFilter[] = ["all", "pending", "countered", "accepted", "scheduled_pickup", "completed", "cancelled", "rejected", "expired"];
 
 const badgeClassByStatus: Record<string, string> = {
   pending: "bg-amber-100 text-amber-700",
+  countered: "bg-blue-100 text-blue-700",
   accepted: "bg-emerald-100 text-emerald-700",
+  scheduled_pickup: "bg-indigo-100 text-indigo-700",
+  completed: "bg-green-100 text-green-700",
+  cancelled: "bg-zinc-100 text-zinc-700",
   rejected: "bg-rose-100 text-rose-700",
+  expired: "bg-slate-100 text-slate-700",
 };
 
 const Offers = () => {
@@ -85,15 +99,20 @@ const Offers = () => {
       all: offers.length,
       pending: offers.filter((offer) => offer.status === "pending").length,
       accepted: offers.filter((offer) => offer.status === "accepted").length,
+      countered: offers.filter((offer) => offer.status === "countered").length,
+      scheduled_pickup: offers.filter((offer) => offer.status === "scheduled_pickup").length,
+      completed: offers.filter((offer) => offer.status === "completed").length,
+      cancelled: offers.filter((offer) => offer.status === "cancelled").length,
       rejected: offers.filter((offer) => offer.status === "rejected").length,
+      expired: offers.filter((offer) => offer.status === "expired").length,
     }),
     [offers],
   );
 
-  const handleOfferStatusUpdate = async (offerId: string, nextStatus: OfferStatus) => {
+  const handleOfferStatusUpdate = async (offerId: string, nextStatus: OfferStatus, counterOfferPrice?: number) => {
     try {
       setUpdatingOfferId(offerId);
-      const updatedOffer = await updateOfferStatus({ offerId, status: nextStatus });
+      const updatedOffer = await updateOfferStatus({ offerId, status: nextStatus, counterOfferPrice });
       setOffers((prev) => prev.map((offer) => (offer.offer_id === offerId ? updatedOffer : offer)));
       toast({
         title: `Offer ${nextStatus}`,
@@ -108,6 +127,23 @@ const Offers = () => {
     } finally {
       setUpdatingOfferId(null);
     }
+  };
+
+  const handleCounterOffer = async (offer: Offer) => {
+    const nextPriceRaw = window.prompt("Enter your counter-offer amount", String(offer.offered_price));
+    if (!nextPriceRaw) {
+      return;
+    }
+    const nextPrice = Number(nextPriceRaw);
+    if (!Number.isFinite(nextPrice) || nextPrice <= 0) {
+      toast({
+        title: "Invalid counter-offer",
+        description: "Please enter a valid amount greater than zero.",
+        variant: "destructive",
+      });
+      return;
+    }
+    await handleOfferStatusUpdate(offer.offer_id, "countered", nextPrice);
   };
 
   return (
@@ -136,6 +172,10 @@ const Offers = () => {
           <Card className="rounded-2xl border-border/70 p-4">
             <p className="text-xs uppercase tracking-wide text-muted-foreground">Accepted</p>
             <p className="mt-1 text-2xl font-semibold">{stats.accepted}</p>
+          </Card>
+          <Card className="rounded-2xl border-border/70 p-4">
+            <p className="text-xs uppercase tracking-wide text-muted-foreground">Countered</p>
+            <p className="mt-1 text-2xl font-semibold">{stats.countered}</p>
           </Card>
           <Card className="rounded-2xl border-border/70 p-4">
             <p className="text-xs uppercase tracking-wide text-muted-foreground">Rejected</p>
@@ -194,11 +234,19 @@ const Offers = () => {
 
                   {offer.note ? <p className="mt-2 text-sm text-muted-foreground">{offer.note}</p> : null}
 
-                  {offer.status === "pending" ? (
-                    <div className="mt-3 flex flex-wrap gap-2">
-                      <Button
-                        size="sm"
-                        onClick={() => void handleOfferStatusUpdate(offer.offer_id, "accepted")}
+                   {offer.status === "pending" || offer.status === "countered" ? (
+                     <div className="mt-3 flex flex-wrap gap-2">
+                       <Button
+                         size="sm"
+                         variant="secondary"
+                         onClick={() => void handleCounterOffer(offer)}
+                         disabled={updatingOfferId === offer.offer_id}
+                       >
+                         Counter
+                       </Button>
+                       <Button
+                         size="sm"
+                         onClick={() => void handleOfferStatusUpdate(offer.offer_id, "accepted")}
                         disabled={updatingOfferId === offer.offer_id}
                       >
                         Accept

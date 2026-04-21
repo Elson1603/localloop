@@ -22,3 +22,7 @@ class PublicUserProfileResponse(BaseModel):
     user_id: str
     username: str
     display_name: str
+    response_rate: float = 0
+    completed_deals: int = 0
+    average_rating: float = 0
+    member_since: str | None = None

@@ -5,6 +5,7 @@ from app.api.auth import router as auth_router
 from app.api.chats import router as chats_router
 from app.api.offers import router as offers_router
 from app.api.products import router as products_router
+from app.api.reviews import router as reviews_router
 from app.api.storage import router as storage_router
 from app.api.users import router as users_router
 from app.api.notifications import router as notifications_router
@@ -40,3 +41,4 @@ app.include_router(chats_router, prefix=settings.api_prefix)
 app.include_router(offers_router, prefix=settings.api_prefix)
 app.include_router(storage_router, prefix=settings.api_prefix)
 app.include_router(notifications_router, prefix=settings.api_prefix)
+app.include_router(reviews_router, prefix=settings.api_prefix)

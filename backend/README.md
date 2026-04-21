@@ -127,6 +127,8 @@ Create these 5 DynamoDB tables in the same AWS region as your backend:
    - Partition key: `offer_id` (String)
 5. `LocalLoopNotifications`
    - Partition key: `notification_id` (String)
+6. `LocalLoopReviews`
+   - Partition key: `review_id` (String)
 
 Recommended table settings for MVP:
 
@@ -151,6 +153,8 @@ Set these values in `.env` (or keep defaults from `.env.example`):
 - `DYNAMODB_CHATS_TABLE`
 - `DYNAMODB_OFFERS_TABLE`
 - `DYNAMODB_NOTIFICATIONS_TABLE`
+- `DYNAMODB_REVIEWS_TABLE`
+- `OFFER_EXPIRY_HOURS` (default: 48)
 
 ### IAM permissions required
 
@@ -185,6 +189,12 @@ Offers:
 
 - `POST /api/v1/offers`
 - `GET /api/v1/offers`
+- `PUT /api/v1/offers/{offer_id}/status` (countered, accepted, scheduled_pickup, completed, cancelled, rejected)
+
+Reviews:
+
+- `POST /api/v1/reviews` (only after a completed deal)
+- `GET /api/v1/reviews?user_id=<user_id>`
 
 All endpoints above should be called with Cognito Bearer token where required.
 

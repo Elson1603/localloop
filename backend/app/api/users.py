@@ -5,7 +5,7 @@ from fastapi import HTTPException, status
 from fastapi import APIRouter, Depends
 
 from app.core.config import get_settings
-from app.core.dynamodb import get_table, serialize_dynamo
+from app.core.dynamodb import get_table, scan_with_optional_filter, serialize_dynamo
 from app.core.security import get_current_user
 from app.schemas.user import PublicUserProfileResponse, UpsertUserProfileRequest, UserProfileResponse
 
@@ -85,6 +85,31 @@ def _resolve_display_name(current_user: dict, fallback_email: str) -> str:
         return username_name
 
     return "User"
+
+
+def _compute_public_metrics(user_id: str) -> tuple[float, int, float]:
+    products_table = get_table(settings.products_table_name)
+    offers_table = get_table(settings.offers_table_name)
+    reviews_table = get_table(settings.reviews_table_name)
+
+    owned_products = scan_with_optional_filter(products_table, {"owner_id": user_id}).get("Items", [])
+    owned_product_ids = {str(product.get("product_id") or "") for product in owned_products}
+    owned_product_ids.discard("")
+
+    incoming_offers = scan_with_optional_filter(offers_table, {}).get("Items", [])
+    relevant_offers = [offer for offer in incoming_offers if str(offer.get("product_id") or "") in owned_product_ids]
+
+    responded_count = sum(
+        1 for offer in relevant_offers if str(offer.get("status") or "") not in {"pending", "countered", "expired"}
+    )
+    total_count = len(relevant_offers)
+    response_rate = round((responded_count / total_count) * 100, 2) if total_count else 0.0
+    completed_deals = sum(1 for offer in relevant_offers if str(offer.get("status") or "") == "completed")
+
+    received_reviews = scan_with_optional_filter(reviews_table, {"reviewee_user_id": user_id}).get("Items", [])
+    ratings = [float(review.get("rating") or 0) for review in received_reviews if review.get("rating") is not None]
+    average_rating = round(sum(ratings) / len(ratings), 2) if ratings else 0.0
+    return response_rate, completed_deals, average_rating
 
 
 @router.put("/me", response_model=UserProfileResponse)
@@ -188,8 +213,13 @@ def get_user_public_profile(
             table.put_item(Item=item)
             data["display_name"] = resolved_display_name
 
+    response_rate, completed_deals, average_rating = _compute_public_metrics(user_id)
     return PublicUserProfileResponse(
         user_id=data.get("user_id", user_id),
         username=_resolve_public_username(data_username, data_email),
         display_name=resolved_display_name or "Seller",
+        response_rate=response_rate,
+        completed_deals=completed_deals,
+        average_rating=average_rating,
+        member_since=str(data.get("created_at") or ""),
     )
