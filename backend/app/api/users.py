@@ -12,7 +12,7 @@ from app.schemas.user import PublicUserProfileResponse, UpsertUserProfileRequest
 router = APIRouter(prefix="/users", tags=["users"])
 settings = get_settings()
 
-UUID_PATTERN = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$", re.IGNORECASE)
+UUID_PATTERN = re.compile(r"^[0-9a-f]{8}[ \-][0-9a-f]{4}[ \-][0-9a-f]{4}[ \-][0-9a-f]{4}[ \-][0-9a-f]{12}$", re.IGNORECASE)
 
 
 def _is_uuid_like(value: str | None) -> bool:
@@ -26,6 +26,9 @@ def _humanize_identifier(value: str | None) -> str:
         return ""
 
     identifier = raw.split("@")[0].strip() if "@" in raw else raw
+    if _is_uuid_like(identifier):
+        return ""
+
     normalized = re.sub(r"[._-]+", " ", identifier)
     normalized = re.sub(r"\s+", " ", normalized).strip()
     if not normalized or _is_uuid_like(normalized) or normalized.isdigit():
@@ -58,7 +61,7 @@ def _resolve_public_username(username: str | None, email: str | None) -> str:
 
 def _is_placeholder_display_name(display_name: str | None, email: str | None) -> bool:
     normalized = (display_name or "").strip().lower()
-    if not normalized or normalized in {"localloop user", "user"}:
+    if not normalized or normalized in {"localloop user", "user", "seller", "member"}:
         return True
 
     if _is_uuid_like(normalized):

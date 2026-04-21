@@ -1,4 +1,4 @@
-const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const UUID_PATTERN = /^[0-9a-f]{8}[ \-]?[0-9a-f]{4}[ \-]?[0-9a-f]{4}[ \-]?[0-9a-f]{4}[ \-]?[0-9a-f]{12}$/i;
 
 const toText = (value: string | null | undefined): string => (typeof value === "string" ? value.trim() : "");
 
@@ -9,7 +9,7 @@ export const isUuidLike = (value: string | null | undefined): boolean => {
 
 export const isPlaceholderDisplayName = (displayName: string | null | undefined, email: string | null | undefined): boolean => {
   const normalized = toText(displayName).toLowerCase();
-  if (!normalized || normalized === "localloop user" || normalized === "user") {
+  if (!normalized || normalized === "localloop user" || normalized === "user" || normalized === "seller" || normalized === "member") {
     return true;
   }
   if (isUuidLike(normalized)) {
@@ -27,6 +27,10 @@ const humanizeIdentifier = (value: string | null | undefined): string => {
   }
 
   const identifier = raw.includes("@") ? raw.split("@")[0] : raw;
+  if (isUuidLike(identifier)) {
+    return "";
+  }
+
   const normalized = identifier.replace(/[._-]+/g, " ").replace(/\s+/g, " ").trim();
   if (!normalized || isUuidLike(normalized) || /^\d+$/.test(normalized)) {
     return "";
