@@ -1,5 +1,7 @@
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8000";
 
+export type ProductStatus = "active" | "reserved" | "sold" | "archived";
+
 export type Product = {
   product_id: string;
   owner_id: string;
@@ -12,7 +14,7 @@ export type Product = {
   longitude?: number | null;
   image_refs?: string[];
   image_urls: string[];
-  status: string;
+  status: ProductStatus;
   created_at: string;
   updated_at: string;
 };
@@ -114,10 +116,13 @@ const parseError = async (response: Response): Promise<string> => {
   return response.statusText || "Request failed";
 };
 
-export const listProducts = async (params?: { ownerId?: string }): Promise<Product[]> => {
+export const listProducts = async (params?: { ownerId?: string; status?: ProductStatus }): Promise<Product[]> => {
   const query = new URLSearchParams();
   if (params?.ownerId) {
     query.set("owner_id", params.ownerId);
+  }
+  if (params?.status) {
+    query.set("status", params.status);
   }
   const suffix = query.size ? `?${query.toString()}` : "";
   const response = await fetch(`${API_BASE_URL}/api/v1/products${suffix}`);
@@ -179,6 +184,24 @@ export const updateProduct = async (
       ...authHeaders(),
     },
     body: JSON.stringify(payload),
+  });
+  if (!response.ok) {
+    throw new Error(await parseError(response));
+  }
+  return (await response.json()) as Product;
+};
+
+export const updateProductStatus = async (payload: {
+  productId: string;
+  status: ProductStatus;
+}): Promise<Product> => {
+  const response = await fetch(`${API_BASE_URL}/api/v1/products/${encodeURIComponent(payload.productId)}/status`, {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json",
+      ...authHeaders(),
+    },
+    body: JSON.stringify({ status: payload.status }),
   });
   if (!response.ok) {
     throw new Error(await parseError(response));

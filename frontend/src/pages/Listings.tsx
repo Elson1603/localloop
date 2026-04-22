@@ -16,8 +16,11 @@ import { distanceInKm, getLocationCoordinates, getSavedUserCoordinates, type Coo
 import { toMarketplaceItem } from "@/lib/marketplace";
 
 const DEFAULT_DISTANCE_KM = 10;
+type SortOption = "nearest" | "newest" | "price-low" | "price-high";
 
 const normalizeCategory = (value: string): string => value.trim().toLowerCase();
+
+const normalizeText = (value: string): string => value.trim().toLowerCase();
 
 const getCategoryFromSearch = (search: string): string => {
   const requestedCategory = new URLSearchParams(search).get("category");
@@ -27,12 +30,16 @@ const getCategoryFromSearch = (search: string): string => {
   return requestedCategory.trim();
 };
 
+const getQueryFromSearch = (search: string): string => new URLSearchParams(search).get("q")?.trim() || "";
+
 const Listings = () => {
   const location = useLocation();
   const [maxPrice, setMaxPrice] = useState(45000);
   const [distance, setDistance] = useState([DEFAULT_DISTANCE_KM]);
   const [distanceFilterActive, setDistanceFilterActive] = useState(false);
   const [category, setCategory] = useState(() => getCategoryFromSearch(location.search));
+  const [searchQuery, setSearchQuery] = useState(() => getQueryFromSearch(location.search));
+  const [sortBy, setSortBy] = useState<SortOption>("nearest");
   const [barterOnly, setBarterOnly] = useState(false);
   const [items, setItems] = useState<MarketplaceItem[]>([]);
   const [availableCategories, setAvailableCategories] = useState<string[]>(() => categories.map((cat) => cat.name));
@@ -44,6 +51,7 @@ const Listings = () => {
 
   useEffect(() => {
     setCategory(getCategoryFromSearch(location.search));
+    setSearchQuery(getQueryFromSearch(location.search));
   }, [location.search]);
 
   const nearbyRequested = useMemo(() => new URLSearchParams(location.search).get("nearby") === "1", [location.search]);
@@ -111,15 +119,36 @@ const Listings = () => {
   }, [userCoords]);
 
   const filtered = useMemo(
-    () =>
-      items.filter((item) => {
+    () => {
+      const normalizedQuery = normalizeText(searchQuery);
+      return items.filter((item) => {
+        const haystack = [
+          item.title,
+          item.description,
+          item.category,
+          item.location,
+        ].map((value) => normalizeText(value)).join(" ");
+
+        const byQuery = !normalizedQuery || haystack.includes(normalizedQuery);
         const byCategory = category === "all" || normalizeCategory(item.category) === normalizeCategory(category);
         const byPrice = (item.price ?? maxPrice) <= maxPrice;
         const byDistance = !distanceFilterActive || item.distanceKm <= distance[0];
         const byBarter = barterOnly ? item.barterAvailable : true;
-        return byCategory && byPrice && byDistance && byBarter;
-      }).sort((first, second) => first.distanceKm - second.distanceKm),
-    [category, maxPrice, distance, distanceFilterActive, barterOnly, items],
+        return byQuery && byCategory && byPrice && byDistance && byBarter;
+      }).sort((first, second) => {
+        if (sortBy === "price-low") {
+          return (first.price ?? Number.MAX_SAFE_INTEGER) - (second.price ?? Number.MAX_SAFE_INTEGER);
+        }
+        if (sortBy === "price-high") {
+          return (second.price ?? 0) - (first.price ?? 0);
+        }
+        if (sortBy === "newest") {
+          return (second.createdAt || "").localeCompare(first.createdAt || "");
+        }
+        return first.distanceKm - second.distanceKm;
+      });
+    },
+    [category, distance, distanceFilterActive, barterOnly, items, maxPrice, searchQuery, sortBy],
   );
 
   return (
@@ -129,7 +158,11 @@ const Listings = () => {
         <h1 className="mb-6 text-3xl font-bold">Product Listings</h1>
 
         <section className="glass rounded-2xl p-5">
-          <div className="grid gap-5 md:grid-cols-2 lg:grid-cols-4">
+          <div className="grid gap-5 md:grid-cols-2 lg:grid-cols-5">
+            <div className="space-y-2">
+              <Label>Search</Label>
+              <Input value={searchQuery} onChange={(event) => setSearchQuery(event.target.value)} placeholder="Phone, desk, books..." />
+            </div>
             <div className="space-y-2">
               <Label>Price range</Label>
               <Input type="number" value={maxPrice} onChange={(e) => setMaxPrice(Number(e.target.value) || 0)} />
@@ -162,6 +195,20 @@ const Listings = () => {
                 min={1}
                 step={1}
               />
+            </div>
+            <div className="space-y-2">
+              <Label>Sort by</Label>
+              <Select value={sortBy} onValueChange={(value) => setSortBy(value as SortOption)}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Sort results" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="nearest">Nearest</SelectItem>
+                  <SelectItem value="newest">Newest</SelectItem>
+                  <SelectItem value="price-low">Price: Low to High</SelectItem>
+                  <SelectItem value="price-high">Price: High to Low</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
             <div className="flex items-center justify-between rounded-xl border border-border/70 bg-card px-3 py-2">
               <Label htmlFor="barter">Buy / Barter</Label>

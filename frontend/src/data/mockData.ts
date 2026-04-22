@@ -8,6 +8,8 @@ export type MarketplaceItem = {
   location: string;
   image: string;
   description: string;
+  status?: "active" | "reserved" | "sold" | "archived";
+  createdAt?: string;
   seller: {
     name: string;
     rating: number;

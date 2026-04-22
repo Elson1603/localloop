@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
+
 import { MarketNavbar } from "@/components/localloop/MarketNavbar";
 import { PageShell } from "@/components/localloop/PageShell";
 import { Badge } from "@/components/ui/badge";
@@ -8,6 +9,7 @@ import { Card } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
 import {
   getMyProfile,
+  getProduct,
   listOffers,
   listProducts,
   updateOfferStatus,
@@ -17,6 +19,7 @@ import {
 } from "@/lib/api";
 
 type OfferFilter = "all" | "pending" | "accepted" | "rejected";
+type OfferView = "incoming" | "outgoing";
 
 const filterOptions: OfferFilter[] = ["all", "pending", "accepted", "rejected"];
 
@@ -30,12 +33,14 @@ const Offers = () => {
   const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const [offers, setOffers] = useState<Offer[]>([]);
+  const [incomingOffers, setIncomingOffers] = useState<Offer[]>([]);
+  const [outgoingOffers, setOutgoingOffers] = useState<Offer[]>([]);
   const [productsById, setProductsById] = useState<Record<string, Product>>({});
   const [activeFilter, setActiveFilter] = useState<OfferFilter>("all");
+  const [activeView, setActiveView] = useState<OfferView>("incoming");
   const [updatingOfferId, setUpdatingOfferId] = useState<string | null>(null);
 
-  const loadIncomingOffers = async (isManualRefresh = false) => {
+  const loadOffers = async (isManualRefresh = false) => {
     try {
       if (isManualRefresh) {
         setIsRefreshing(true);
@@ -45,19 +50,44 @@ const Offers = () => {
 
       const profile = await getMyProfile();
       const ownedProducts = await listProducts({ ownerId: profile.user_id });
-      const productLookup = Object.fromEntries(ownedProducts.map((product) => [product.product_id, product]));
-      setProductsById(productLookup);
+      const incomingByProduct = await Promise.all(ownedProducts.map((product) => listOffers({ productId: product.product_id })));
+      const nextIncomingOffers = incomingByProduct.flat().sort((first, second) => second.created_at.localeCompare(first.created_at));
 
-      if (!ownedProducts.length) {
-        setOffers([]);
-        return;
-      }
+      const nextOutgoingOffers = (await listOffers({ buyerUserId: profile.user_id }))
+        .sort((first, second) => second.created_at.localeCompare(first.created_at));
 
-      const offersByProduct = await Promise.all(ownedProducts.map((product) => listOffers({ productId: product.product_id })));
-      const mergedOffers = offersByProduct.flat().sort((first, second) => second.created_at.localeCompare(first.created_at));
-      setOffers(mergedOffers);
+      const initialProductLookup = Object.fromEntries(ownedProducts.map((product) => [product.product_id, product]));
+      const missingProductIds = Array.from(
+        new Set(
+          nextOutgoingOffers
+            .map((offer) => offer.product_id)
+            .filter((productId) => Boolean(productId) && !initialProductLookup[productId]),
+        ),
+      );
+
+      const fetchedProducts = await Promise.all(
+        missingProductIds.map(async (productId) => {
+          try {
+            return await getProduct(productId);
+          } catch {
+            return null;
+          }
+        }),
+      );
+
+      const mergedLookup = { ...initialProductLookup };
+      fetchedProducts.forEach((product) => {
+        if (product) {
+          mergedLookup[product.product_id] = product;
+        }
+      });
+
+      setProductsById(mergedLookup);
+      setIncomingOffers(nextIncomingOffers);
+      setOutgoingOffers(nextOutgoingOffers);
     } catch (error: unknown) {
-      setOffers([]);
+      setIncomingOffers([]);
+      setOutgoingOffers([]);
       toast({
         title: "Unable to load offers",
         description: error instanceof Error ? error.message : "Please try again shortly.",
@@ -70,31 +100,35 @@ const Offers = () => {
   };
 
   useEffect(() => {
-    void loadIncomingOffers();
+    void loadOffers();
   }, []);
+
+  const activeOffers = useMemo(() => (
+    activeView === "incoming" ? incomingOffers : outgoingOffers
+  ), [activeView, incomingOffers, outgoingOffers]);
 
   const filteredOffers = useMemo(() => {
     if (activeFilter === "all") {
-      return offers;
+      return activeOffers;
     }
-    return offers.filter((offer) => offer.status === activeFilter);
-  }, [activeFilter, offers]);
+    return activeOffers.filter((offer) => offer.status === activeFilter);
+  }, [activeFilter, activeOffers]);
 
-  const stats = useMemo(
-    () => ({
-      all: offers.length,
-      pending: offers.filter((offer) => offer.status === "pending").length,
-      accepted: offers.filter((offer) => offer.status === "accepted").length,
-      rejected: offers.filter((offer) => offer.status === "rejected").length,
-    }),
-    [offers],
-  );
+  const stats = useMemo(() => {
+    const allOffers = activeOffers;
+    return {
+      all: allOffers.length,
+      pending: allOffers.filter((offer) => offer.status === "pending").length,
+      accepted: allOffers.filter((offer) => offer.status === "accepted").length,
+      rejected: allOffers.filter((offer) => offer.status === "rejected").length,
+    };
+  }, [activeOffers]);
 
   const handleOfferStatusUpdate = async (offerId: string, nextStatus: OfferStatus) => {
     try {
       setUpdatingOfferId(offerId);
       const updatedOffer = await updateOfferStatus({ offerId, status: nextStatus });
-      setOffers((prev) => prev.map((offer) => (offer.offer_id === offerId ? updatedOffer : offer)));
+      setIncomingOffers((prev) => prev.map((offer) => (offer.offer_id === offerId ? updatedOffer : offer)));
       toast({
         title: `Offer ${nextStatus}`,
         description: `The selected offer was marked as ${nextStatus}.`,
@@ -116,13 +150,22 @@ const Offers = () => {
       <PageShell>
         <div className="mb-5 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
           <div>
-            <h1 className="text-3xl font-bold">Incoming Offers</h1>
-            <p className="text-muted-foreground">Review and respond to offers from buyers across all your listings.</p>
+            <h1 className="text-3xl font-bold">Offers</h1>
+            <p className="text-muted-foreground">Track negotiations you received as a seller and the offers you placed as a buyer.</p>
           </div>
-          <Button variant="secondary" onClick={() => void loadIncomingOffers(true)} disabled={isLoading || isRefreshing}>
+          <Button variant="secondary" onClick={() => void loadOffers(true)} disabled={isLoading || isRefreshing}>
             {isRefreshing ? "Refreshing..." : "Refresh"}
           </Button>
         </div>
+
+        <section className="mb-5 flex flex-wrap gap-2">
+          <Button variant={activeView === "incoming" ? "default" : "secondary"} onClick={() => setActiveView("incoming")}>
+            Incoming
+          </Button>
+          <Button variant={activeView === "outgoing" ? "default" : "secondary"} onClick={() => setActiveView("outgoing")}>
+            Sent
+          </Button>
+        </section>
 
         <section className="mb-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
           <Card className="rounded-2xl border-border/70 p-4">
@@ -159,12 +202,16 @@ const Offers = () => {
 
         {isLoading ? (
           <Card className="rounded-2xl border-border/70 p-5">
-            <p className="text-muted-foreground">Loading incoming offers...</p>
+            <p className="text-muted-foreground">Loading offers...</p>
           </Card>
         ) : filteredOffers.length === 0 ? (
           <Card className="rounded-2xl border-border/70 p-5">
             <p className="font-medium">No offers found</p>
-            <p className="mt-1 text-sm text-muted-foreground">Incoming offers will appear here when buyers place offers on your listings.</p>
+            <p className="mt-1 text-sm text-muted-foreground">
+              {activeView === "incoming"
+                ? "Incoming offers will appear here when buyers place offers on your listings."
+                : "Offers you send from product pages will appear here."}
+            </p>
           </Card>
         ) : (
           <div className="space-y-3">
@@ -187,14 +234,17 @@ const Offers = () => {
 
                   <div className="mt-3 grid gap-2 text-sm md:grid-cols-2">
                     <p><span className="text-muted-foreground">Offered price:</span> ₹{offer.offered_price.toLocaleString()}</p>
-                    <p><span className="text-muted-foreground">Buyer:</span> {offer.buyer_user_id}</p>
+                    <p>
+                      <span className="text-muted-foreground">{activeView === "incoming" ? "Buyer" : "Seller"}:</span>{" "}
+                      {activeView === "incoming" ? offer.buyer_user_id : product?.owner_id || "Unknown"}
+                    </p>
                     <p><span className="text-muted-foreground">Created:</span> {new Date(offer.created_at).toLocaleString()}</p>
                     <p><span className="text-muted-foreground">Updated:</span> {new Date(offer.updated_at).toLocaleString()}</p>
                   </div>
 
                   {offer.note ? <p className="mt-2 text-sm text-muted-foreground">{offer.note}</p> : null}
 
-                  {offer.status === "pending" ? (
+                  {activeView === "incoming" && offer.status === "pending" ? (
                     <div className="mt-3 flex flex-wrap gap-2">
                       <Button
                         size="sm"

@@ -4,6 +4,7 @@ import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import { MarketNavbar } from "@/components/localloop/MarketNavbar";
 import { PageShell } from "@/components/localloop/PageShell";
 import { ProductCard } from "@/components/localloop/ProductCard";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import {
@@ -25,9 +26,11 @@ import {
   listOffers,
   listProducts,
   updateOfferStatus,
+  updateProductStatus,
   type Offer,
   type OfferStatus,
   type Product,
+  type ProductStatus,
 } from "@/lib/api";
 import { distanceInKm, getLocationCoordinates, getSavedUserCoordinates } from "@/lib/location";
 import { toMarketplaceItem } from "@/lib/marketplace";
@@ -52,6 +55,20 @@ const decodeTokenSub = (): string => {
   }
 };
 
+const productStatusLabel: Record<ProductStatus, string> = {
+  active: "Active",
+  reserved: "Reserved",
+  sold: "Sold",
+  archived: "Archived",
+};
+
+const productStatusBadgeClass: Record<ProductStatus, string> = {
+  active: "bg-emerald-100 text-emerald-700",
+  reserved: "bg-amber-100 text-amber-700",
+  sold: "bg-slate-200 text-slate-700",
+  archived: "bg-zinc-200 text-zinc-700",
+};
+
 const ProductDetail = () => {
   const { toast } = useToast();
   const { id } = useParams();
@@ -69,6 +86,7 @@ const ProductDetail = () => {
   const [incomingOffers, setIncomingOffers] = useState<Offer[]>([]);
   const [isLoadingOffers, setIsLoadingOffers] = useState(false);
   const [updatingOfferId, setUpdatingOfferId] = useState<string | null>(null);
+  const [updatingListingStatus, setUpdatingListingStatus] = useState<ProductStatus | null>(null);
   const isAuthenticated = Boolean(localStorage.getItem("localloop_access_token"));
   const myUserId = decodeTokenSub();
 
@@ -184,6 +202,7 @@ const ProductDetail = () => {
   }, [rawProduct?.latitude, rawProduct?.longitude, rawProduct?.location]);
 
   const isOwner = Boolean(isAuthenticated && myUserId && sellerUserId && myUserId === sellerUserId);
+  const canNegotiate = rawProduct?.status === "active";
 
   useEffect(() => {
     let mounted = true;
@@ -238,6 +257,15 @@ const ProductDetail = () => {
     }
 
     if (!product?.price) {
+      return;
+    }
+
+    if (!canNegotiate) {
+      toast({
+        title: "Offers unavailable",
+        description: "This listing is not currently accepting new offers.",
+        variant: "destructive",
+      });
       return;
     }
 
@@ -304,6 +332,38 @@ const ProductDetail = () => {
     }
   };
 
+  const handleListingStatusUpdate = async (nextStatus: ProductStatus) => {
+    if (!rawProduct) {
+      return;
+    }
+
+    try {
+      setUpdatingListingStatus(nextStatus);
+      const updatedProduct = await updateProductStatus({ productId: rawProduct.product_id, status: nextStatus });
+      const mappedProduct = toMarketplaceItem(updatedProduct);
+      setRawProduct(updatedProduct);
+      setProduct((prev) => ({
+        ...mappedProduct,
+        seller: {
+          ...mappedProduct.seller,
+          name: prev?.seller.name || mappedProduct.seller.name,
+        },
+      }));
+      toast({
+        title: "Listing updated",
+        description: `Listing marked as ${productStatusLabel[nextStatus].toLowerCase()}.`,
+      });
+    } catch (error: unknown) {
+      toast({
+        title: "Unable to update listing",
+        description: error instanceof Error ? error.message : "Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setUpdatingListingStatus(null);
+    }
+  };
+
   if (!product) {
     return (
       <div className="min-h-screen">
@@ -339,7 +399,14 @@ const ProductDetail = () => {
 
           <section className="space-y-4">
             <h1 className="text-3xl font-bold">{product.title}</h1>
-            <p className="text-2xl font-semibold text-primary">{product.price ? `₹${product.price.toLocaleString()}` : "Barter Available"}</p>
+            <div className="flex flex-wrap items-center gap-3">
+              <p className="text-2xl font-semibold text-primary">{product.price ? `₹${product.price.toLocaleString()}` : "Barter Available"}</p>
+              {rawProduct ? (
+                <Badge className={productStatusBadgeClass[rawProduct.status]}>
+                  {productStatusLabel[rawProduct.status]}
+                </Badge>
+              ) : null}
+            </div>
             <p className="text-muted-foreground">{product.description}</p>
 
             <Card className="rounded-2xl border-border/70 p-4">
@@ -372,24 +439,47 @@ const ProductDetail = () => {
 
             <div className="flex flex-wrap gap-3">
               {isOwner ? (
-                <Button asChild variant="secondary" className="rounded-full">
-                  <Link to={`/post?productId=${encodeURIComponent(product.id)}`}>
-                    <Pencil className="mr-2 h-4 w-4" /> Edit Listing
-                  </Link>
-                </Button>
-              ) : (
                 <>
-                  <Button asChild className="rounded-full bg-primary text-primary-foreground hover:bg-primary/90">
-                    <Link to={chatPath}>
-                      <MessageCircle className="mr-2 h-4 w-4" /> Chat with Seller
+                  <Button asChild variant="secondary" className="rounded-full">
+                    <Link to={`/post?productId=${encodeURIComponent(product.id)}`}>
+                      <Pencil className="mr-2 h-4 w-4" /> Edit Listing
                     </Link>
                   </Button>
-                  <Button variant="secondary" className="rounded-full" onClick={handleOpenOfferDialog}>
+                  {(["active", "reserved", "sold", "archived"] as ProductStatus[]).map((statusOption) => (
+                    <Button
+                      key={statusOption}
+                      variant={rawProduct?.status === statusOption ? "default" : "secondary"}
+                      className="rounded-full"
+                      disabled={updatingListingStatus !== null || rawProduct?.status === statusOption}
+                      onClick={() => void handleListingStatusUpdate(statusOption)}
+                    >
+                      {updatingListingStatus === statusOption ? "Updating..." : productStatusLabel[statusOption]}
+                    </Button>
+                  ))}
+                </>
+              ) : (
+                <>
+                  {canNegotiate ? (
+                    <Button asChild className="rounded-full bg-primary text-primary-foreground hover:bg-primary/90">
+                      <Link to={chatPath}>
+                        <MessageCircle className="mr-2 h-4 w-4" /> Chat with Seller
+                      </Link>
+                    </Button>
+                  ) : (
+                    <Button className="rounded-full bg-primary text-primary-foreground hover:bg-primary/90" disabled>
+                      <MessageCircle className="mr-2 h-4 w-4" /> Chat with Seller
+                    </Button>
+                  )}
+                  <Button variant="secondary" className="rounded-full" onClick={handleOpenOfferDialog} disabled={!canNegotiate}>
                     <Repeat2 className="mr-2 h-4 w-4" /> Make Offer
                   </Button>
                 </>
               )}
             </div>
+
+            {!isOwner && !canNegotiate ? (
+              <p className="text-sm text-muted-foreground">This listing is currently {rawProduct?.status}. New offers are disabled.</p>
+            ) : null}
 
             <Dialog open={isOfferDialogOpen} onOpenChange={setIsOfferDialogOpen}>
               <DialogContent className="sm:max-w-md">

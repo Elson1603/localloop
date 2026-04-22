@@ -1,4 +1,9 @@
+from typing import Literal
+
 from pydantic import BaseModel, Field
+
+
+ProductStatus = Literal["active", "reserved", "sold", "archived"]
 
 
 class CreateProductRequest(BaseModel):
@@ -35,6 +40,10 @@ class ProductResponse(BaseModel):
     longitude: float | None = None
     image_refs: list[str] = Field(default_factory=list)
     image_urls: list[str]
-    status: str
+    status: ProductStatus
     created_at: str
     updated_at: str
+
+
+class UpdateProductStatusRequest(BaseModel):
+    status: ProductStatus

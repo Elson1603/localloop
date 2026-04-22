@@ -21,6 +21,7 @@ export const MarketNavbar = () => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [profileInitials, setProfileInitials] = useState("LL");
   const [isLocating, setIsLocating] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
   const { toast } = useToast();
   const navigate = useNavigate();
   const location = useLocation();
@@ -31,6 +32,11 @@ export const MarketNavbar = () => {
     const isDark = document.documentElement.classList.contains("dark");
     setDark(isDark);
   }, []);
+
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    setSearchQuery(params.get("q") || "");
+  }, [location.pathname, location.search]);
 
   useEffect(() => {
     const parseTokenPayload = (token: string): Record<string, unknown> | null => {
@@ -120,6 +126,15 @@ export const MarketNavbar = () => {
     }
   };
 
+  const submitSearch = () => {
+    const params = new URLSearchParams();
+    const normalizedQuery = searchQuery.trim();
+    if (normalizedQuery) {
+      params.set("q", normalizedQuery);
+    }
+    navigate(`/listings${params.size ? `?${params.toString()}` : ""}`);
+  };
+
   return (
     <header className="sticky top-0 z-40 border-b border-border/70 bg-background/80 backdrop-blur-xl">
       <div className="container flex flex-col gap-3 py-3 md:flex-row md:items-center md:justify-between">
@@ -156,8 +171,22 @@ export const MarketNavbar = () => {
         <div className="flex flex-1 items-center gap-2 md:max-w-xl">
           <div className="relative w-full">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <Input className="rounded-full pl-9" placeholder="Search nearby items" />
+            <Input
+              className="rounded-full pl-9"
+              placeholder="Search nearby items"
+              value={searchQuery}
+              onChange={(event) => setSearchQuery(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") {
+                  event.preventDefault();
+                  submitSearch();
+                }
+              }}
+            />
           </div>
+          <Button variant="secondary" className="rounded-full" onClick={submitSearch}>
+            Search
+          </Button>
           <Button variant="secondary" className="rounded-full" onClick={() => void goNearby()} disabled={isLocating}>
             <MapPin className="mr-2 h-4 w-4" /> {isLocating ? "Locating..." : "Nearby"}
           </Button>
