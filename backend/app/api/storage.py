@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
+from botocore.exceptions import NoCredentialsError
 
 from app.core.config import get_settings
 from app.core.security import get_current_user
@@ -6,8 +7,13 @@ from app.schemas.storage import PresignUploadRequest, PresignUploadResponse
 from app.services.s3_service import S3Service
 
 router = APIRouter(prefix="/storage", tags=["storage"])
-settings = get_settings()
-s3_service = S3Service()
+
+
+def _get_storage_context() -> tuple:
+    get_settings.cache_clear()
+    settings = get_settings()
+    s3_service = S3Service()
+    return settings, s3_service
 
 
 @router.post("/presign-upload", response_model=PresignUploadResponse)
@@ -15,6 +21,7 @@ def presign_upload(
     payload: PresignUploadRequest,
     current_user: dict = Depends(get_current_user),
 ) -> PresignUploadResponse:
+    settings, s3_service = _get_storage_context()
     if not settings.s3_bucket_name:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -42,6 +49,7 @@ async def upload_file(
     file: UploadFile = File(...),
     current_user: dict = Depends(get_current_user),
 ) -> PresignUploadResponse:
+    settings, s3_service = _get_storage_context()
     if not settings.s3_bucket_name:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -57,7 +65,13 @@ async def upload_file(
     user_id = current_user.get("sub", "anonymous")
     object_key = s3_service.build_object_key(user_id=user_id, file_name=file.filename or "upload.jpg")
     body = await file.read()
-    s3_service.upload_bytes(object_key=object_key, body=body, content_type=content_type)
+    try:
+        s3_service.upload_bytes(object_key=object_key, body=body, content_type=content_type)
+    except NoCredentialsError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="AWS credentials not configured for S3 upload",
+        ) from exc
 
     return PresignUploadResponse(
         upload_url="",

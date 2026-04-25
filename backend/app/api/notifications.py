@@ -11,7 +11,6 @@ from app.core.security import get_current_user
 from app.schemas.notification import NotificationResponse
 
 router = APIRouter(prefix="/notifications", tags=["notifications"])
-settings = get_settings()
 logger = logging.getLogger(__name__)
 
 _RECIPIENT_INDEX_CANDIDATES = (
@@ -19,6 +18,11 @@ _RECIPIENT_INDEX_CANDIDATES = (
     "recipient-user-id-index",
     "recipientUserId-index",
 )
+
+
+def _get_notifications_settings():
+    get_settings.cache_clear()
+    return get_settings()
 
 
 def _is_access_denied(error: ClientError) -> bool:
@@ -89,6 +93,7 @@ def _find_notification_item(table, recipient_user_id: str, notification_id: str)
 
 
 def _load_from_user_index(table, recipient_user_id: str) -> list[dict]:
+    settings = _get_notifications_settings()
     users_table = get_table(settings.users_table_name)
     user_item = users_table.get_item(Key={"user_id": recipient_user_id}).get("Item", {})
     raw_ids = user_item.get("notification_ids") or []
@@ -126,6 +131,7 @@ def list_notifications(
     current_user: dict = Depends(get_current_user),
 ) -> list[NotificationResponse]:
     current_user_id = current_user.get("sub", "")
+    settings = _get_notifications_settings()
     table = get_table(settings.notifications_table_name)
     items = _try_query_by_recipient(table, current_user_id)
 
@@ -149,6 +155,7 @@ def mark_notification_read(
     current_user: dict = Depends(get_current_user),
 ) -> NotificationResponse:
     current_user_id = current_user.get("sub", "")
+    settings = _get_notifications_settings()
     table = get_table(settings.notifications_table_name)
 
     item = _find_notification_item(table, current_user_id, notification_id)

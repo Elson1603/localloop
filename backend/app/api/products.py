@@ -15,13 +15,21 @@ from app.schemas.product import (
 from app.services.s3_service import S3Service
 
 router = APIRouter(prefix="/products", tags=["products"])
-settings = get_settings()
-s3_service = S3Service()
+
+
+def _get_products_settings():
+    get_settings.cache_clear()
+    return get_settings()
+
+
+def _get_s3_service() -> S3Service:
+    return S3Service()
 
 
 def _with_displayable_images(item: dict) -> dict:
     mapped = dict(item)
     images = mapped.get("image_urls", [])
+    s3_service = _get_s3_service()
     mapped["image_refs"] = [str(image_ref) for image_ref in images]
     mapped["image_urls"] = [s3_service.to_display_url(image_ref) for image_ref in images]
     return mapped
@@ -51,6 +59,7 @@ def create_product(
         "updated_at": now,
     }
 
+    settings = _get_products_settings()
     table = get_table(settings.products_table_name)
     table.put_item(Item=item)
     return ProductResponse(**serialize_dynamo(_with_displayable_images(item)))
@@ -62,6 +71,7 @@ def update_product(
     payload: UpdateProductRequest,
     current_user: dict = Depends(get_current_user),
 ) -> ProductResponse:
+    settings = _get_products_settings()
     table = get_table(settings.products_table_name)
     existing = table.get_item(Key={"product_id": product_id}).get("Item")
     if not existing:
@@ -98,6 +108,7 @@ def list_products(
     owner_id: str | None = Query(default=None),
     listing_status: str | None = Query(default=None, alias="status"),
 ) -> list[ProductResponse]:
+    settings = _get_products_settings()
     table = get_table(settings.products_table_name)
     effective_status = listing_status
     if owner_id is None and listing_status is None:
@@ -110,6 +121,7 @@ def list_products(
 
 @router.get("/{product_id}", response_model=ProductResponse)
 def get_product(product_id: str) -> ProductResponse:
+    settings = _get_products_settings()
     table = get_table(settings.products_table_name)
     item = table.get_item(Key={"product_id": product_id}).get("Item")
     if not item:
@@ -123,6 +135,7 @@ def update_product_status(
     payload: UpdateProductStatusRequest,
     current_user: dict = Depends(get_current_user),
 ) -> ProductResponse:
+    settings = _get_products_settings()
     table = get_table(settings.products_table_name)
     existing = table.get_item(Key={"product_id": product_id}).get("Item")
     if not existing:

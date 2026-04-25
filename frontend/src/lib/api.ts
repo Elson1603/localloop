@@ -69,6 +69,17 @@ export type LocalLoopNotification = {
   created_at: string;
 };
 
+export type AiPriceSuggestion = {
+  min_price: number;
+  max_price: number;
+  reason: string;
+};
+
+export type AiDescriptionSuggestion = {
+  description: string;
+  keywords: string[];
+};
+
 
 type PresignUploadResponse = {
   upload_url: string;
@@ -421,4 +432,62 @@ export const markNotificationRead = async (notificationId: string): Promise<Loca
     throw new Error(await parseError(response));
   }
   return (await response.json()) as LocalLoopNotification;
+};
+
+export const suggestPriceWithAi = async (payload: {
+  title: string;
+  category: string;
+  condition?: string;
+  location?: string;
+  description?: string;
+  currency?: string;
+}): Promise<AiPriceSuggestion> => {
+  const response = await fetch(`${API_BASE_URL}/api/v1/ai/price-suggestion`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...authHeaders(),
+    },
+    body: JSON.stringify({
+      currency: "INR",
+      ...payload,
+    }),
+  });
+
+  if (!response.ok) {
+    throw new Error(await parseError(response));
+  }
+
+  return (await response.json()) as AiPriceSuggestion;
+};
+
+export const generateProductDescriptionWithAi = async (payload: {
+  title: string;
+  category: string;
+  condition?: string;
+  location?: string;
+  image?: File;
+}): Promise<AiDescriptionSuggestion> => {
+  const formData = new FormData();
+  formData.append("title", payload.title);
+  formData.append("category", payload.category);
+  formData.append("condition", payload.condition ?? "");
+  formData.append("location", payload.location ?? "");
+  if (payload.image) {
+    formData.append("image", payload.image);
+  }
+
+  const response = await fetch(`${API_BASE_URL}/api/v1/ai/product-description`, {
+    method: "POST",
+    headers: {
+      ...authHeaders(),
+    },
+    body: formData,
+  });
+
+  if (!response.ok) {
+    throw new Error(await parseError(response));
+  }
+
+  return (await response.json()) as AiDescriptionSuggestion;
 };

@@ -1,6 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.api.ai import router as ai_router
 from app.api.auth import router as auth_router
 from app.api.chats import router as chats_router
 from app.api.offers import router as offers_router
@@ -40,3 +41,4 @@ app.include_router(chats_router, prefix=settings.api_prefix)
 app.include_router(offers_router, prefix=settings.api_prefix)
 app.include_router(storage_router, prefix=settings.api_prefix)
 app.include_router(notifications_router, prefix=settings.api_prefix)
+app.include_router(ai_router, prefix=settings.api_prefix)

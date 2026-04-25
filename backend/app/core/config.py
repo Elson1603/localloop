@@ -10,7 +10,7 @@ BASE_DIR = Path(__file__).resolve().parents[2]
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
-        env_file=(BASE_DIR / ".env", BASE_DIR / ".env.example"),
+        env_file=(BASE_DIR / ".env.example", BASE_DIR / ".env"),
         env_file_encoding="utf-8",
         extra="ignore",
     )
@@ -31,6 +31,13 @@ class Settings(BaseSettings):
     chats_table_name: str = Field(default="LocalLoopChats", alias="DYNAMODB_CHATS_TABLE")
     offers_table_name: str = Field(default="LocalLoopOffers", alias="DYNAMODB_OFFERS_TABLE")
     notifications_table_name: str = Field(default="LocalLoopNotifications", alias="DYNAMODB_NOTIFICATIONS_TABLE")
+    ai_provider: str = Field(default="google", alias="AI_PROVIDER")
+    gemini_api_key: str = Field(default="", alias="GEMINI_API_KEY")
+    gemini_model: str = Field(default="gemini-2.0-flash", alias="GEMINI_MODEL")
+    openrouter_api_key: str = Field(default="", alias="OPENROUTER_API_KEY")
+    openrouter_model: str = Field(default="google/gemma-3-9b-it:free", alias="OPENROUTER_MODEL")
+    openrouter_site_url: str = Field(default="http://localhost:5173", alias="OPENROUTER_SITE_URL")
+    openrouter_app_name: str = Field(default="LocalLoop", alias="OPENROUTER_APP_NAME")
     api_prefix: str = Field(default="/api/v1", alias="API_PREFIX")
     project_name: str = Field(default="LocalLoop Backend", alias="PROJECT_NAME")
 

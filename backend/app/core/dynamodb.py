@@ -8,6 +8,7 @@ from app.core.config import get_settings
 
 
 def get_dynamodb_resource() -> Any:
+    get_settings.cache_clear()
     settings = get_settings()
     kwargs: dict[str, Any] = {"region_name": settings.aws_region}
     if settings.aws_access_key_id and settings.aws_secret_access_key:

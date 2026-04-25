@@ -12,7 +12,16 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
-import { createProduct, getProduct, presignProductImageUpload, updateProduct, uploadFileToS3, uploadProductImageViaApi } from "@/lib/api";
+import {
+  createProduct,
+  generateProductDescriptionWithAi,
+  getProduct,
+  presignProductImageUpload,
+  suggestPriceWithAi,
+  updateProduct,
+  uploadFileToS3,
+  uploadProductImageViaApi,
+} from "@/lib/api";
 import { requestCurrentPosition, saveUserCoordinates, type Coordinates } from "@/lib/location";
 import { categories } from "@/data/mockData";
 
@@ -184,6 +193,7 @@ const PostItem = () => {
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [price, setPrice] = useState("");
+  const [itemCondition, setItemCondition] = useState("");
   const [location, setLocation] = useState("");
   const [category, setCategory] = useState("");
   const [barterEnabled, setBarterEnabled] = useState(false);
@@ -194,6 +204,14 @@ const PostItem = () => {
   const [liveCoords, setLiveCoords] = useState<Coordinates | null>(null);
   const [isLoadingProduct, setIsLoadingProduct] = useState(isEditMode);
   const [isPublishing, setIsPublishing] = useState(false);
+  const [isSuggestingPrice, setIsSuggestingPrice] = useState(false);
+  const [isGeneratingDescription, setIsGeneratingDescription] = useState(false);
+  const [aiPriceSuggestion, setAiPriceSuggestion] = useState<{
+    min_price: number;
+    max_price: number;
+    reason: string;
+  } | null>(null);
+  const [aiKeywords, setAiKeywords] = useState<string[]>([]);
   const [editingImageId, setEditingImageId] = useState<string | null>(null);
   const [editDraft, setEditDraft] = useState<ImageEditDraft>(DEFAULT_EDIT_DRAFT);
   const [isApplyingEdit, setIsApplyingEdit] = useState(false);
@@ -647,13 +665,81 @@ const PostItem = () => {
     };
   }, [editProductId, isEditMode, navigate, toast]);
 
-  const suggestedPrice = useMemo(() => {
-    const numeric = Number(price);
-    if (!numeric) return "Suggested ₹500–₹700 based on nearby listings.";
-    const floor = Math.max(100, Math.round(numeric * 0.85));
-    const ceil = Math.round(numeric * 1.15);
-    return `Suggested ₹${floor.toLocaleString()}–₹${ceil.toLocaleString()} based on nearby listings.`;
-  }, [price]);
+  const suggestedPriceText = useMemo(() => {
+    if (!aiPriceSuggestion) {
+      return "Add title, category, condition, and live location, then generate a smart AI range.";
+    }
+
+    return `Suggested ₹${Math.round(aiPriceSuggestion.min_price).toLocaleString()}–₹${Math.round(aiPriceSuggestion.max_price).toLocaleString()}. ${aiPriceSuggestion.reason}`;
+  }, [aiPriceSuggestion]);
+
+  const handleSuggestPrice = async () => {
+    if (!title.trim() || !category || !location.trim()) {
+      toast({
+        title: "Add core fields first",
+        description: "Title, category, and live location are needed for a better AI price suggestion.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsSuggestingPrice(true);
+    try {
+      const suggestion = await suggestPriceWithAi({
+        title: title.trim(),
+        category,
+        condition: itemCondition.trim(),
+        location: location.trim(),
+        description: description.trim(),
+        currency: "INR",
+      });
+      setAiPriceSuggestion(suggestion);
+      toast({ title: "AI price updated", description: "Smart range generated from your listing details." });
+    } catch (error: unknown) {
+      toast({
+        title: "Price suggestion failed",
+        description: error instanceof Error ? error.message : "Unable to generate AI price suggestion.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsSuggestingPrice(false);
+    }
+  };
+
+  const handleGenerateDescription = async () => {
+    if (!title.trim() || !category) {
+      toast({
+        title: "Add title and category",
+        description: "AI description needs at least the product title and category.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const imageForPrompt = images.find((image) => image.file)?.file;
+    setIsGeneratingDescription(true);
+    try {
+      const generated = await generateProductDescriptionWithAi({
+        title: title.trim(),
+        category,
+        condition: itemCondition.trim(),
+        location: location.trim(),
+        image: imageForPrompt,
+      });
+      setDescription(generated.description);
+      setAiKeywords(generated.keywords);
+      setErrors((prev) => ({ ...prev, description: undefined }));
+      toast({ title: "Description generated", description: "AI wrote a listing draft with search keywords." });
+    } catch (error: unknown) {
+      toast({
+        title: "Description generation failed",
+        description: error instanceof Error ? error.message : "Unable to generate AI description.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsGeneratingDescription(false);
+    }
+  };
 
   const detectLiveLocation = async () => {
     setIsDetectingLocation(true);
@@ -898,7 +984,19 @@ const PostItem = () => {
                 {errors.title && <p className="text-sm text-destructive">{errors.title}</p>}
               </div>
               <div className="space-y-2">
-                <Label htmlFor="description">Description</Label>
+                <div className="flex items-center justify-between gap-3">
+                  <Label htmlFor="description">Description</Label>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={isGeneratingDescription}
+                    onClick={() => void handleGenerateDescription()}
+                  >
+                    <Sparkles className="mr-2 h-4 w-4" />
+                    {isGeneratingDescription ? "Generating..." : "Generate with AI"}
+                  </Button>
+                </div>
                 <Textarea
                   id="description"
                   placeholder="Describe condition, age, included accessories..."
@@ -910,11 +1008,14 @@ const PostItem = () => {
                   }}
                 />
                 <p className="text-xs text-muted-foreground">{description.trim().length}/500 characters</p>
+                {aiKeywords.length > 0 && (
+                  <p className="text-xs text-muted-foreground">Keywords: {aiKeywords.join(", ")}</p>
+                )}
                 {errors.description && <p className="text-sm text-destructive">{errors.description}</p>}
               </div>
               <div className="grid gap-4 md:grid-cols-2">
                 <div className="space-y-2">
-                  <Label htmlFor="price">Price (optional)</Label>
+                  <Label htmlFor="price">Price</Label>
                   <Input id="price" type="number" placeholder="e.g. 500" value={price} onChange={(e) => setPrice(e.target.value)} />
                   {errors.price && <p className="text-sm text-destructive">{errors.price}</p>}
                 </div>
@@ -950,6 +1051,15 @@ const PostItem = () => {
                   </Select>
                   {errors.category && <p className="text-sm text-destructive">{errors.category}</p>}
                 </div>
+                <div className="space-y-2">
+                  <Label htmlFor="condition">Condition (for AI)</Label>
+                  <Input
+                    id="condition"
+                    placeholder="e.g. Like new, 6 months used"
+                    value={itemCondition}
+                    onChange={(e) => setItemCondition(e.target.value)}
+                  />
+                </div>
               </div>
 
               <div className="flex items-center justify-between rounded-xl border border-border/70 bg-card px-3 py-2">
@@ -958,10 +1068,15 @@ const PostItem = () => {
               </div>
 
               <div className="rounded-xl border border-accent/40 bg-accent/10 p-3 text-sm">
-                <p className="inline-flex items-center font-medium text-foreground">
-                  <Sparkles className="mr-2 h-4 w-4 text-accent" /> AI price suggestion
-                </p>
-                <p className="mt-1 text-muted-foreground">{suggestedPrice}</p>
+                <div className="flex items-center justify-between gap-3">
+                  <p className="inline-flex items-center font-medium text-foreground">
+                    <Sparkles className="mr-2 h-4 w-4 text-accent" /> AI price suggestion
+                  </p>
+                  <Button type="button" variant="outline" size="sm" disabled={isSuggestingPrice} onClick={() => void handleSuggestPrice()}>
+                    {isSuggestingPrice ? "Generating..." : "Generate"}
+                  </Button>
+                </div>
+                <p className="mt-1 text-muted-foreground">{suggestedPriceText}</p>
               </div>
 
               <motion.div whileHover={{ scale: 1.01 }} whileTap={{ scale: 0.99 }}>

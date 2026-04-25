@@ -11,6 +11,7 @@ _ALLOWED_CONTENT_TYPES = {"image/jpeg", "image/png", "image/webp"}
 
 class S3Service:
     def __init__(self) -> None:
+        get_settings.cache_clear()
         self.settings = get_settings()
         kwargs: dict[str, str] = {"region_name": self.settings.aws_region}
         if self.settings.aws_access_key_id and self.settings.aws_secret_access_key:
