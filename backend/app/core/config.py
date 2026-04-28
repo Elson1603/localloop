@@ -40,6 +40,15 @@ class Settings(BaseSettings):
     openrouter_app_name: str = Field(default="LocalLoop", alias="OPENROUTER_APP_NAME")
     api_prefix: str = Field(default="/api/v1", alias="API_PREFIX")
     project_name: str = Field(default="LocalLoop Backend", alias="PROJECT_NAME")
+    cors_allowed_origins: str = Field(default="", alias="CORS_ALLOWED_ORIGINS")
+    cors_allow_localhost: bool = Field(default=True, alias="CORS_ALLOW_LOCALHOST")
+
+    @property
+    def cors_allowed_origins_list(self) -> list[str]:
+        raw = self.cors_allowed_origins
+        if not raw:
+            return []
+        return [origin.strip() for origin in raw.split(",") if origin.strip()]
 
     @property
     def cognito_issuer(self) -> str:
