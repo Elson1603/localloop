@@ -48,6 +48,13 @@ This backend starts with authentication using AWS Cognito.
    - `COGNITO_APP_CLIENT_ID`
    - `COGNITO_APP_CLIENT_SECRET` (leave empty if client secret disabled)
 
+When deploying behind API Gateway/Lambda, also configure CORS for your frontend origin:
+
+- `FRONTEND_URL=https://<your-amplify-domain>`
+- or `CORS_ALLOWED_ORIGINS=https://<your-amplify-domain>,https://<another-domain>`
+- for preview/branch subdomains, use `CORS_ALLOWED_ORIGIN_REGEX`.
+   Example: `^https://.*\.amplifyapp\.com$`
+
 Also configure AWS credentials on your machine so boto3 can call Cognito:
 
 - Option A: `aws configure`

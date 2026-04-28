@@ -24,7 +24,7 @@ def _dedupe_origins(origins: list[str]) -> list[str]:
 
 def _build_cors_config() -> tuple[list[str], str | None, bool]:
     allowed_origins = settings.cors_allowed_origins_list.copy()
-    allow_origin_regex = None
+    allow_origin_regex = settings.cors_allowed_origin_regex.strip() or None
 
     if settings.cors_allow_localhost:
         allowed_origins.extend(
@@ -35,7 +35,12 @@ def _build_cors_config() -> tuple[list[str], str | None, bool]:
                 "http://127.0.0.1:8080",
             ]
         )
-        allow_origin_regex = r"^https?://(localhost|127\.0\.0\.1)(:\d+)?$"
+        localhost_regex = r"^https?://(localhost|127\.0\.0\.1)(:\d+)?$"
+        allow_origin_regex = (
+            f"({allow_origin_regex})|({localhost_regex})"
+            if allow_origin_regex
+            else localhost_regex
+        )
 
     allowed_origins = _dedupe_origins([origin for origin in allowed_origins if origin])
     allow_credentials = True
