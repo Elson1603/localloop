@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { requestCurrentPosition, saveUserCoordinates } from "@/lib/location";
 import { NotificationsMenu } from "@/components/localloop/NotificationsMenu";
+import { getValidAccessToken, getValidIdToken } from "@/lib/auth";
 
 const links = [
   { to: "/", label: "Home" },
@@ -72,8 +73,8 @@ export const MarketNavbar = () => {
     };
 
     const syncAuthState = () => {
-      const accessToken = localStorage.getItem("localloop_access_token");
-      const idToken = localStorage.getItem("localloop_id_token");
+      const accessToken = getValidAccessToken();
+      const idToken = getValidIdToken();
       const authenticated = Boolean(accessToken);
 
       setIsAuthenticated(authenticated);

@@ -35,9 +35,10 @@ import {
 import { distanceInKm, getLocationCoordinates, getSavedUserCoordinates } from "@/lib/location";
 import { toMarketplaceItem } from "@/lib/marketplace";
 import { resolveDisplayName, resolveUsernameHandle } from "@/lib/userIdentity";
+import { getValidAccessToken, getValidIdToken } from "@/lib/auth";
 
 const decodeTokenSub = (): string => {
-  const token = localStorage.getItem("localloop_id_token");
+  const token = getValidIdToken();
   if (!token) {
     return "";
   }
@@ -87,7 +88,7 @@ const ProductDetail = () => {
   const [isLoadingOffers, setIsLoadingOffers] = useState(false);
   const [updatingOfferId, setUpdatingOfferId] = useState<string | null>(null);
   const [updatingListingStatus, setUpdatingListingStatus] = useState<ProductStatus | null>(null);
-  const isAuthenticated = Boolean(localStorage.getItem("localloop_access_token"));
+  const isAuthenticated = Boolean(getValidAccessToken());
   const myUserId = decodeTokenSub();
 
   useEffect(() => {

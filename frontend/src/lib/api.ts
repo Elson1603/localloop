@@ -1,3 +1,5 @@
+import { getValidAccessToken, getValidIdToken } from "@/lib/auth";
+
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8000";
 
 export type ProductStatus = "active" | "reserved" | "sold" | "archived";
@@ -87,9 +89,9 @@ type PresignUploadResponse = {
   expires_in: number;
 };
 
-const getAuthToken = (): string | null => localStorage.getItem("localloop_access_token");
+const getAuthToken = (): string | null => getValidAccessToken();
 
-const getIdToken = (): string | null => localStorage.getItem("localloop_id_token");
+const getIdToken = (): string | null => getValidIdToken();
 
 const authHeaders = (): HeadersInit => {
   const token = getAuthToken();
@@ -283,6 +285,9 @@ export const listChatMessages = async (params: {
   senderUserId?: string;
   recipientUserId?: string;
 }): Promise<ChatMessage[]> => {
+  if (!getAuthToken()) {
+    return [];
+  }
   const query = new URLSearchParams();
   if (params.chatId) {
     query.set("chat_id", params.chatId);
@@ -347,6 +352,9 @@ export const listOffers = async (params?: {
   productId?: string;
   buyerUserId?: string;
 }): Promise<Offer[]> => {
+  if (!getAuthToken()) {
+    return [];
+  }
   const query = new URLSearchParams();
   if (params?.productId) {
     query.set("product_id", params.productId);
@@ -410,6 +418,9 @@ export const getUserProfile = async (userId: string): Promise<PublicUserProfile>
 };
 
 export const listNotifications = async (): Promise<LocalLoopNotification[]> => {
+  if (!getAuthToken()) {
+    return [];
+  }
   const response = await fetch(`${API_BASE_URL}/api/v1/notifications`, {
     headers: {
       ...authHeaders(),

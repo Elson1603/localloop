@@ -9,6 +9,7 @@ import { Card } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
 import { getMyProfile, listChatMessages, listOffers, listProducts } from "@/lib/api";
 import { resolveDisplayName, resolveUsernameHandle } from "@/lib/userIdentity";
+import { clearAuthTokens, getValidAccessToken, getValidIdToken } from "@/lib/auth";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8000";
 
@@ -73,8 +74,8 @@ const Profile = () => {
 
   useEffect(() => {
     const loadProfile = async () => {
-      const accessToken = localStorage.getItem("localloop_access_token");
-      const idToken = localStorage.getItem("localloop_id_token");
+      const accessToken = getValidAccessToken();
+      const idToken = getValidIdToken();
 
       if (!accessToken) {
         navigate("/auth", { replace: true });
@@ -153,9 +154,7 @@ const Profile = () => {
           });
         }
       } catch (error: unknown) {
-        localStorage.removeItem("localloop_access_token");
-        localStorage.removeItem("localloop_id_token");
-        localStorage.removeItem("localloop_refresh_token");
+        clearAuthTokens();
         toast({
           title: "Session expired",
           description: error instanceof Error ? error.message : "Please login again.",
@@ -171,9 +170,7 @@ const Profile = () => {
   }, [navigate, toast]);
 
   const handleLogout = () => {
-    localStorage.removeItem("localloop_access_token");
-    localStorage.removeItem("localloop_id_token");
-    localStorage.removeItem("localloop_refresh_token");
+    clearAuthTokens();
     toast({
       title: "Logged out",
       description: "You have been signed out successfully.",

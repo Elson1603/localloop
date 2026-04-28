@@ -5,6 +5,7 @@ import { useLocation } from "react-router-dom";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { getValidAccessToken } from "@/lib/auth";
 import Auth from "./pages/Auth";
 import Chat from "./pages/Chat";
 import Index from "./pages/Index";
@@ -15,7 +16,7 @@ import PostItem from "./pages/PostItem";
 import ProductDetail from "./pages/ProductDetail";
 import Profile from "./pages/Profile";
 
-const isAuthenticated = (): boolean => Boolean(localStorage.getItem("localloop_access_token"));
+const isAuthenticated = (): boolean => Boolean(getValidAccessToken());
 
 const ProtectedRoute = ({ children }: { children: JSX.Element }) => {
   const location = useLocation();
