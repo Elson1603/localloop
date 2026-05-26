@@ -36,7 +36,7 @@ LocalLoop is a full‑stack **local resale marketplace** application that enable
   - [Troubleshooting](#troubleshooting)
   - [Roadmap](#roadmap)
   - [Contributing](#contributing)
-  - [License](#license)
+  
 
 ---
 
