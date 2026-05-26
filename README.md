@@ -390,6 +390,4 @@ Contributions are welcome!
 
 ---
 
-## License
 
-Add a license file (e.g., MIT) if you plan to open source this project.
